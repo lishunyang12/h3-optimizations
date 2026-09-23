@@ -1,0 +1,371 @@
+"""
+Copyright (c) 2025 by FlashInfer team.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+"""
+
+from .core import JitSpec, gen_jit_spec, current_compilation_context
+from .utils import write_if_different
+from . import env as jit_env
+import os
+import pathlib
+import jinja2
+from itertools import product
+from typing import Dict, Tuple, List, Any
+
+
+def gen_comm_alltoall_module() -> JitSpec:
+    return gen_jit_spec(
+        "comm",
+        [
+            jit_env.FLASHINFER_CSRC_DIR / "trtllm_alltoall.cu",
+            jit_env.FLASHINFER_CSRC_DIR / "trtllm_alltoall_prepare.cu",
+        ],
+    )
+
+
+def gen_trtllm_mnnvl_comm_module() -> JitSpec:
+    # This MNNVL path is supported on Hopper/Blackwell datacenter targets only.
+    # Thor (SM11x) and RTX/consumer (SM12x) are intentionally excluded here.
+    nvcc_flags = current_compilation_context.get_nvcc_flags_list(
+        supported_major_versions=[9, 10]
+    )
+    # MNNVL allreduce is fully deterministic across ranks. Oneshot specializes
+    # the common TP<=8 cases to keep the local value in registers and
+    # volatile-load only peers from the Lamport buffer. Larger world sizes use a
+    # compact deterministic fallback: the runtime benefit is thin there, while
+    # rank-specializing every case significantly increases JIT compile time.
+    return gen_jit_spec(
+        "trtllm_mnnvl_comm",
+        [
+            jit_env.FLASHINFER_CSRC_DIR / "trtllm_mnnvl_allreduce.cu",
+        ],
+        extra_cuda_cflags=nvcc_flags,
+    )
+
+
+def gen_mixed_comm_module() -> JitSpec:
+    gen_directory = jit_env.FLASHINFER_GEN_SRC_DIR / "gen_mixed_comm"
+    os.makedirs(gen_directory, exist_ok=True)
+    source_paths = [jit_env.FLASHINFER_CSRC_DIR / "mixed_comm.cu"]
+
+    def is_valid_op(
+        op: str,
+        use_local_tp: bool,
+        use_local_dp: bool,
+        use_inter_tp: bool,
+        use_inter_dp: bool,
+    ) -> bool:
+        # Should be aligned with is_valid_op in mixed_comm.cuh
+        use_tp = use_local_tp or use_inter_tp
+        use_dp = use_local_dp or use_inter_dp
+        use_mixed = use_tp and use_dp
+        if use_mixed:
+            return op in ("ALLREDUCE_ALLGATHER", "REDUCESCATTER_ALLREDUCE")
+        if use_tp:
+            return op == "ALLREDUCE"
+        return op in ("ALLGATHER", "REDUCESCATTER")
+
+    def is_valid_mode(mode: str, use_local_tp: bool, use_inter_tp: bool) -> bool:
+        # Should be aligned with is_valid_mode in mixed_comm.cuh
+        if mode.startswith("OPT_WAITS_"):
+            return True
+        if mode.startswith("OPT_BYTES1_"):
+            return use_local_tp
+        if mode.startswith("OPT_BYTES2_"):
+            return use_inter_tp
+        return False
+
+    def is_valid_block_y(
+        block_size_y: int, local_tp_size: int, local_dp_size: int, mode: str
+    ) -> bool:
+        # Should be aligned with is_valid_block_y in mixed_comm.cuh
+        if not mode.endswith("_MC"):
+            return block_size_y == 1
+        if mode.startswith("OPT_WAITS_"):
+            return local_dp_size % block_size_y == 0
+        return (local_tp_size * local_dp_size) % block_size_y == 0
+
+    with open(jit_env.FLASHINFER_CSRC_DIR / "mixed_comm_kernel_inst.jinja") as f:
+        kernel_inst_templ = jinja2.Template(f.read())
+    kernel_dict = {
+        "allreduce_kernel": "ALLREDUCE",
+        "allgather_kernel": "ALLGATHER",
+        "reducescatter_kernel": "REDUCESCATTER",
+        "fused_allreduce_allgather_kernel": "ALLREDUCE_ALLGATHER",
+        "fused_reducescatter_allreduce_kernel": "REDUCESCATTER_ALLREDUCE",
+    }
+    mode_list = [
+        "OPT_WAITS_MC",
+        "OPT_WAITS_UC",
+        "OPT_BYTES1_MC",
+        "OPT_BYTES1_UC",
+        "OPT_BYTES2_MC",
+        "OPT_BYTES2_UC",
+    ]
+    dtype_list = ["nv_half", "nv_bfloat16"]
+    local_size_list = [1, 2, 4, 8]
+    inter_flag_list = [False, True]
+    compile_dict: Dict[Tuple[str, str], List[Dict[str, Any]]] = {
+        (kernel_name, mode): []
+        for kernel_name, mode in product(kernel_dict.keys(), mode_list)
+    }
+    for kernel_name, op in kernel_dict.items():
+        for (
+            block_size_y,
+            local_tp_size,
+            local_dp_size,
+            use_inter_tp,
+            use_inter_dp,
+            mode,
+            dtype,
+        ) in product(
+            local_size_list,
+            local_size_list,
+            local_size_list,
+            inter_flag_list,
+            inter_flag_list,
+            mode_list,
+            dtype_list,
+        ):
+            use_local_tp = local_tp_size > 1
+            use_local_dp = local_dp_size > 1
+            if not use_local_tp and not use_local_dp:
+                continue
+            if not is_valid_op(
+                op, use_local_tp, use_local_dp, use_inter_tp, use_inter_dp
+            ):
+                continue
+            if not is_valid_mode(mode, use_local_tp, use_inter_tp):
+                continue
+            if not is_valid_block_y(block_size_y, local_tp_size, local_dp_size, mode):
+                continue
+            compile_dict[(kernel_name, mode)].append(
+                {
+                    "kernel_name": kernel_name,
+                    "block_size_y": block_size_y,
+                    "local_tp_size": local_tp_size,
+                    "local_dp_size": local_dp_size,
+                    "use_inter_tp": str(use_inter_tp).lower(),
+                    "use_inter_dp": str(use_inter_dp).lower(),
+                    "mode": mode,
+                    "dtype": dtype,
+                }
+            )
+    for (kernel_name, mode), instantiations in compile_dict.items():
+        dest_path = gen_directory / f"mixed_comm_{kernel_name}_{mode}_inst.cu"
+        source_paths.append(dest_path)
+        source = kernel_inst_templ.render(instantiations=instantiations)
+        write_if_different(dest_path, source)
+
+    import nvidia.nvshmem
+
+    path_base = pathlib.Path(nvidia.nvshmem.__path__[0])
+
+    nvcc_flags = current_compilation_context.get_nvcc_flags_list(
+        supported_major_versions=[9, 10]
+    ) + ["-rdc=true"]
+    ldflags = [f"-L{str(path_base / 'lib')}"] + ["-lnvshmem_device"]
+
+    return gen_jit_spec(
+        "mixed_comm",
+        source_paths,
+        extra_include_paths=[str(path_base / "include")],
+        extra_cuda_cflags=nvcc_flags,
+        extra_ldflags=ldflags,
+        needs_device_linking=True,
+    )
+
+
+def gen_trtllm_comm_module() -> JitSpec:
+    nvcc_flags = current_compilation_context.get_nvcc_flags_list(
+        supported_major_versions=[9, 10, 12]
+    )
+    return gen_jit_spec(
+        "trtllm_comm",
+        [
+            jit_env.FLASHINFER_CSRC_DIR / "trtllm_allreduce.cu",
+            jit_env.FLASHINFER_CSRC_DIR / "trtllm_allreduce_fusion.cu",
+            jit_env.FLASHINFER_CSRC_DIR / "trtllm_moe_allreduce_fusion.cu",
+        ],
+        extra_cuda_cflags=nvcc_flags,
+    )
+
+
+def gen_vllm_comm_module() -> JitSpec:
+    return gen_jit_spec(
+        "vllm_comm",
+        [
+            jit_env.FLASHINFER_CSRC_DIR / "vllm_custom_all_reduce.cu",
+        ],
+    )
+
+
+def gen_pcie_ipc_comm_debug_module(
+    stall_ns: int,
+    stall_island: int,
+    no_block_epoch: int = 0,
+    per_block_epoch: int = 0,
+    no_barrier_entry_sync: int = 0,
+) -> JitSpec:
+    """Build the kernels with one protocol mechanism disabled. Not for shipping.
+
+    Used by the opt-in negative-control tests and by the benchmark's
+    ``--protocol-ab`` mode. Every switch produces an INCORRECT build.
+
+    ``stall_ns``/``stall_island``
+        Stall one island between the owner-pair rendezvous and the cross read.
+        The only way to open the TP8 cross-island window -- a host-side delay
+        cannot, because the pair barrier releases both islands together.
+
+    ``no_block_epoch``
+        Pin the scratch to half 0, i.e. no double buffer. Matches what the two
+        staged TP8 kernels used to do; for the others it is a protocol that
+        never shipped.
+
+    ``per_block_epoch``
+        Pick the half by per-block parity instead of per call. Matches what
+        TP2, TP4 and the TP8 pack kernel used to do. One change in grid size
+        then desynchronises the block ranges permanently.
+
+    ``no_barrier_entry_sync``
+        Drop the leading CTA barrier from the three signalling helpers. Applies
+        to every kernel that takes a barrier.
+    """
+    return gen_jit_spec(
+        f"pcie_ipc_comm_dbg{stall_ns}_{stall_island}_{no_block_epoch}"
+        f"_{per_block_epoch}_{no_barrier_entry_sync}",
+        [
+            jit_env.FLASHINFER_CSRC_DIR / "pcie_ipc_all_reduce.cu",
+        ],
+        extra_cuda_cflags=[
+            f"-DFLASHINFER_PCIE_IPC_DEBUG_CROSS_STALL_NS={stall_ns}",
+            f"-DFLASHINFER_PCIE_IPC_DEBUG_STALL_ISLAND={stall_island}",
+            f"-DFLASHINFER_PCIE_IPC_DEBUG_NO_BLOCK_EPOCH={no_block_epoch}",
+            f"-DFLASHINFER_PCIE_IPC_DEBUG_PER_BLOCK_EPOCH={per_block_epoch}",
+            f"-DFLASHINFER_PCIE_IPC_DEBUG_NO_BARRIER_ENTRY_SYNC={no_barrier_entry_sync}",
+        ],
+    )
+
+
+def gen_pcie_ipc_comm_module() -> JitSpec:
+    # No architecture restriction: the kernels use only plain PTX loads/stores
+    # and CUDA IPC, both of which predate every architecture flashinfer builds
+    # for. The target is a PCIe machine without NVLink, which is orthogonal to
+    # the SM version.
+    return gen_jit_spec(
+        "pcie_ipc_comm",
+        [
+            jit_env.FLASHINFER_CSRC_DIR / "pcie_ipc_all_reduce.cu",
+        ],
+    )
+
+
+def gen_ulysses_a2a_module() -> JitSpec:
+    return gen_jit_spec(
+        "ulysses_a2a",
+        [
+            jit_env.FLASHINFER_CSRC_DIR / "ulysses_all_to_all.cu",
+        ],
+    )
+
+
+def gen_ulysses_pcie_module() -> JitSpec:
+    """Build the optional single-node PCIe/mlx5 Ulysses transport.
+
+    Reached only for an explicit ``backend="pcie"``, and deliberately absent
+    from ``flashinfer/aot.py``, so nothing else ever needs rdma-core.
+
+    ``csrc/ulysses_pcie_transport.cuh`` is intentionally not in ``sources``
+    (a ``.cuh`` there would become its own translation unit); ninja's depfile
+    tracks it for rebuilds.
+    """
+    return gen_jit_spec(
+        "ulysses_pcie",
+        [jit_env.FLASHINFER_CSRC_DIR / "ulysses_pcie.cu"],
+        extra_ldflags=["-libverbs", "-lmlx5", "-lcuda"],
+    )
+
+
+def gen_moe_alltoall_module() -> JitSpec:
+    return gen_jit_spec(
+        "mnnvl_moe_alltoall",
+        [
+            jit_env.FLASHINFER_CSRC_DIR / "trtllm_moe_alltoall.cu",
+            jit_env.FLASHINFER_CSRC_DIR
+            / "nv_internal"
+            / "tensorrt_llm"
+            / "kernels"
+            / "communicationKernels"
+            / "moeAlltoAllKernels.cu",
+            jit_env.FLASHINFER_CSRC_DIR
+            / "nv_internal"
+            / "cpp"
+            / "common"
+            / "envUtils.cpp",
+            jit_env.FLASHINFER_CSRC_DIR
+            / "nv_internal"
+            / "cpp"
+            / "common"
+            / "tllmException.cpp",
+            jit_env.FLASHINFER_CSRC_DIR
+            / "nv_internal"
+            / "cpp"
+            / "common"
+            / "logger.cpp",
+            jit_env.FLASHINFER_CSRC_DIR
+            / "nv_internal"
+            / "cpp"
+            / "common"
+            / "stringUtils.cpp",
+        ],
+        extra_include_paths=[
+            str(jit_env.FLASHINFER_CSRC_DIR / "nv_internal"),
+            str(jit_env.FLASHINFER_CSRC_DIR / "nv_internal" / "include"),
+        ],
+        extra_cuda_cflags=[
+            "-DENABLE_BF16",
+        ],
+    )
+
+
+def gen_dcp_alltoall_module() -> JitSpec:
+    nvcc_flags = current_compilation_context.get_nvcc_flags_list(
+        supported_major_versions=[9, 10, 11, 12]
+    )
+    return gen_jit_spec(
+        "dcp_alltoall",
+        [
+            jit_env.FLASHINFER_CSRC_DIR / "trtllm_dcp_alltoall.cu",
+            jit_env.FLASHINFER_CSRC_DIR
+            / "nv_internal"
+            / "tensorrt_llm"
+            / "kernels"
+            / "helixAllToAll.cu",
+            jit_env.FLASHINFER_CSRC_DIR
+            / "nv_internal"
+            / "cpp"
+            / "common"
+            / "envUtils.cpp",
+            jit_env.FLASHINFER_CSRC_DIR
+            / "nv_internal"
+            / "cpp"
+            / "common"
+            / "tllmException.cpp",
+        ],
+        extra_include_paths=[
+            str(jit_env.FLASHINFER_CSRC_DIR / "nv_internal"),
+            str(jit_env.FLASHINFER_CSRC_DIR / "nv_internal" / "include"),
+        ],
+        extra_cuda_cflags=nvcc_flags,
+    )

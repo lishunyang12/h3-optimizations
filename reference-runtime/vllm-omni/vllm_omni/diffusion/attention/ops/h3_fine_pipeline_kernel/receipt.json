@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "sources": {
+    "kernel": {
+      "source": "/lustre/raplab/client/sylarl/minimax-h3-native/experiments/h3-vsa-sage-teahouse15s-20260910/flashinfer/csrc/cake_sage_block_sparse_attention/sm_120a/cake_sage_block_sparse_attention_h3_ragged_bs1_v1_kernel.cu",
+      "source_sha256": "9f138d7cb3893165162e0bd1a2bb64f116b084c78bc5cad91719290b708742ff",
+      "output": "/lustre/raplab/client/sylarl/minimax-h3-native/experiments/h3-ulysses-overlap-20260910/lossless-v16-fine-pipeline/vllm-omni/vllm_omni/diffusion/attention/ops/h3_fine_pipeline_kernel/h3_v16_fine_query_tiles_kernel.cu",
+      "output_sha256": "b6b0ed94b219db221a1c2165ee9dcb6c31b8b8b2bcf0b70e9437067108f9a408",
+      "exact_reverse_transform": true,
+      "replacement_count": 3
+    },
+    "binding": {
+      "source": "/lustre/raplab/client/sylarl/minimax-h3-native/experiments/h3-vsa-sage-teahouse15s-20260910/flashinfer/csrc/cake_sage_block_sparse_attention/sm_120a/cake_sage_block_sparse_attention_h3_ragged_bs1_v1_binding.cu",
+      "source_sha256": "f8a7b99f6c0f588559336c4ef7d37046fb09248ee4cd190cfc9f96b684881b01",
+      "output": "/lustre/raplab/client/sylarl/minimax-h3-native/experiments/h3-ulysses-overlap-20260910/lossless-v16-fine-pipeline/vllm-omni/vllm_omni/diffusion/attention/ops/h3_fine_pipeline_kernel/h3_v16_fine_query_tiles_binding.cu",
+      "output_sha256": "58023fc5fb3bcd12c5aa5d4bf421b806bd0f75714cd09b8f7541fa6b6b5cb8b7",
+      "exact_reverse_transform": true,
+      "replacement_count": 6
+    }
+  },
+  "compile_flags": [
+    "--use_fast_math"
+  ],
+  "original_module": "cake_sage_block_sparse_attention_h3_ragged_bs1_v1",
+  "note": "Same math, layout, launch_bounds(128,3), 25600-byte shared memory; only query tile selection is indirect."
+}

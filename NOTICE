@@ -1,0 +1,8 @@
+H3 Optimizations
+Copyright 2026 H3 Optimizations contributors.
+
+New packaging, documentation and launcher code is licensed under Apache-2.0.
+This repository includes modified source from vLLM-Omni, FlashInfer and FastVideo.
+Their original copyright notices and licenses are retained in each source tree.
+See docs/THIRD_PARTY.md and configs/sources.json for provenance and license scope.
+Model weights are not included and are not relicensed by this repository.

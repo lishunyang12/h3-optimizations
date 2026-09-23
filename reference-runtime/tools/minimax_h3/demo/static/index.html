@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>H3 Live — real-time video + audio</title>
+  <style>
+    :root{color-scheme:dark;--ink:#f4f2ea;--muted:#a6a6a1;--line:#2b2c2f;--lime:#c8ff61;--cyan:#71f7e3;--panel:rgba(15,16,17,.86)}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#08090a;color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    body{overflow-x:hidden;background:radial-gradient(900px 600px at 12% 2%,#173d39 0,transparent 55%),radial-gradient(700px 540px at 92% 4%,#30243d 0,transparent 58%),#08090a}
+    .shell{width:min(1500px,100%);margin:auto;padding:18px 22px 28px}.top{display:flex;align-items:center;justify-content:space-between;height:56px}.brand{display:flex;gap:12px;align-items:center;font-weight:760;letter-spacing:-.03em;font-size:20px}.mark{width:28px;height:28px;border-radius:9px;background:conic-gradient(from 210deg,var(--lime),var(--cyan),#a78bfa,var(--lime));box-shadow:0 0 36px rgba(113,247,227,.3)}
+    .status{display:flex;align-items:center;gap:9px;color:var(--muted);font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.08em}.dot{width:8px;height:8px;border-radius:50%;background:#777}.dot.live{background:var(--lime);box-shadow:0 0 0 5px rgba(200,255,97,.11)}
+    .layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px}.stage{position:relative;aspect-ratio:16/9;overflow:hidden;border-radius:22px;background:#000;border:1px solid #252629;box-shadow:0 32px 100px rgba(0,0,0,.45)}
+    video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;opacity:0;transition:opacity .22s ease}video.active{opacity:1}.scrim{position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.42),transparent 25%,transparent 65%,rgba(0,0,0,.66))}
+    .stage-top,.stage-bottom{position:absolute;left:20px;right:20px;display:flex;justify-content:space-between;align-items:center;gap:12px}.stage-top{top:18px}.stage-bottom{bottom:18px;align-items:flex-end}.badge{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.16);background:rgba(8,9,10,.56);backdrop-filter:blur(14px);border-radius:999px;padding:8px 11px;font-size:11px;font-weight:720;letter-spacing:.06em;text-transform:uppercase}.badge.good{border-color:rgba(200,255,97,.42);color:var(--lime)}
+    .scene h1{margin:0 0 7px;font-size:clamp(22px,3vw,42px);line-height:1;letter-spacing:-.045em}.scene p{margin:0;color:#d0d0cb;font-size:13px}.sound{pointer-events:auto;border:1px solid rgba(255,255,255,.18);background:rgba(8,9,10,.6);color:white;border-radius:12px;padding:10px 13px;cursor:pointer}
+    .rail{display:flex;flex-direction:column;gap:14px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:17px;backdrop-filter:blur(18px)}.panel h2{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#8f908c;margin:0 0 14px}.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.metric{background:#17191a;border:1px solid #282a2b;border-radius:13px;padding:12px}.metric span{display:block;color:#83847f;font-size:10px;text-transform:uppercase;letter-spacing:.08em}.metric strong{display:block;margin-top:5px;font:700 20px ui-monospace,SFMono-Regular,Menlo,monospace}.metric.wide{grid-column:1/-1}.metric strong.good{color:var(--lime)}
+    .queues{display:flex;flex-direction:column;gap:9px}.queue{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;background:#151617;border:1px solid #252729}.qicon{display:grid;place-items:center;width:27px;height:27px;border-radius:9px;background:#252729;color:var(--muted);font-size:12px}.qcopy{min-width:0;flex:1}.qcopy strong,.qcopy span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.qcopy strong{font-size:12px}.qcopy span{color:#858681;font-size:10px;margin-top:3px}.qnum{font:700 12px ui-monospace,monospace;color:var(--cyan)}
+    .composer{margin-top:18px;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:stretch;background:rgba(13,14,15,.88);border:1px solid var(--line);border-radius:18px;padding:10px;backdrop-filter:blur(20px)}.preset{display:flex;align-items:center;padding:0 13px;border-radius:11px;background:#1d1f20;color:var(--cyan);font-size:12px;font-weight:700;white-space:nowrap}textarea{resize:none;min-height:48px;max-height:110px;padding:13px 5px;background:transparent;border:0;outline:0;color:var(--ink);font:500 13px/1.45 inherit}button.generate{border:0;border-radius:12px;padding:0 20px;background:var(--lime);color:#10120d;font-weight:800;cursor:pointer}button:disabled{opacity:.48;cursor:not-allowed}.hint{padding:9px 5px 0;color:#7f807c;font-size:11px}.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,20px);opacity:0;background:#eceee6;color:#111;border-radius:12px;padding:11px 15px;font-size:12px;transition:.2s;z-index:9}.toast.show{opacity:1;transform:translate(-50%,0)}
+    @media(max-width:900px){.layout{grid-template-columns:1fr}.rail{display:grid;grid-template-columns:1fr 1fr}.composer{grid-template-columns:1fr auto}.preset{display:none}.stage{border-radius:15px}.shell{padding:10px}.scene p{display:none}}@media(max-width:600px){.rail{grid-template-columns:1fr}.stage-top,.stage-bottom{left:12px;right:12px}.stage-top{top:12px}.stage-bottom{bottom:12px}.badge:nth-child(2){display:none}.composer{margin-top:10px}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="top"><div class="brand"><span class="mark"></span>H3 LIVE</div><div class="status"><span id="statusDot" class="dot"></span><span id="statusText">connecting</span></div></header>
+    <section class="layout">
+      <div class="stage" id="stage">
+        <video id="videoA" playsinline muted preload="auto"></video><video id="videoB" playsinline muted preload="auto"></video><div class="scrim"></div>
+        <div class="stage-top"><span class="badge"><span style="color:#ff6b69">●</span> continuous demo</span><span id="rtfBadge" class="badge">startup buffer</span></div>
+        <div class="stage-bottom"><div class="scene"><h1 id="sceneTitle">Glowfish After Midnight</h1><p>15-second video + synchronized audio · four-step distilled H3</p></div><button id="sound" class="sound">Enable sound</button></div>
+      </div>
+      <aside class="rail">
+        <div class="panel"><h2>Live performance</h2><div class="metric-grid">
+          <div class="metric"><span>Generate</span><strong id="generation">—</strong></div><div class="metric"><span>Media</span><strong id="media">15.08s</strong></div>
+          <div class="metric wide"><span>Real-time factor</span><strong id="rtf">buffering</strong></div>
+        </div></div>
+        <div class="panel"><h2>Two-queue pipeline</h2><div class="queues">
+          <div class="queue"><div class="qicon">G</div><div class="qcopy"><strong id="genState">Waiting for viewer</strong><span>generation queue</span></div><div class="qnum" id="genCount">0</div></div>
+          <div class="queue"><div class="qicon">▶</div><div class="qcopy"><strong id="playState">Startup buffer</strong><span>playout queue</span></div><div class="qnum" id="playCount">0</div></div>
+        </div></div>
+      </aside>
+    </section>
+    <section class="composer">
+      <div class="preset">QUALIFIED PRESET</div>
+      <textarea id="prompt" aria-label="Scene prompt" placeholder="The prepared demo prompt loads here…"></textarea>
+      <button id="generate" class="generate">Queue scene</button>
+    </section>
+    <div class="hint" id="hint">The default lane is calibrated for RTF &lt; 1. Custom prompts are available only when the BF16 compatibility lane is enabled.</div>
+  </main>
+  <div id="toast" class="toast"></div>
+  <script>
+    const $=id=>document.getElementById(id), videos=[$('videoA'),$('videoB')];
+    let state=null,current=null,active=0,transitioning=false,started=false;
+    function toast(message){const el=$('toast');el.textContent=message;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600)}
+    async function api(path,options={}){const response=await fetch(path,options);if(!response.ok){let msg=response.statusText;try{msg=(await response.json()).detail||msg}catch{}throw new Error(msg)}return response.json()}
+    async function heartbeat(){try{await api('/api/heartbeat',{method:'POST'})}catch{}}
+    function setMetrics(clip){if(!clip)return;const live=clip.generation_seconds!==null;$('generation').textContent=live?`${clip.generation_seconds.toFixed(2)}s`:'prebuilt';$('media').textContent=`${clip.media_seconds.toFixed(2)}s`;const r=clip.rtf;$('rtf').textContent=r===null?'startup buffer':r.toFixed(3);$('rtf').className=(r!==null&&r<1)?'good':'';$('rtfBadge').textContent=r===null?'startup buffer':`RTF ${r.toFixed(3)}`;$('rtfBadge').className=(r!==null&&r<1)?'badge good':'badge'}
+    function render(s){state=s;const q=s.playout_queue||[];$('statusDot').className=`dot ${s.viewer_active?'live':''}`;$('statusText').textContent=s.last_error?'backend retrying':(s.viewer_active?'live · autoplay':'ready');$('prompt').value||=s.preset.prompt;$('genState').textContent=s.generation_queue.active?'Rendering next segment':'Queue topped up';$('genCount').textContent=(s.generation_queue.active?1:0)+s.generation_queue.pending;$('playState').textContent=q.length?'Ready to play':'Refilling';$('playCount').textContent=q.length;if(current)setMetrics(current);else if(s.latest)setMetrics(s.latest);if(s.last_error)console.warn(s.last_error);if(!started&&q.length)startClip(q[0]);}
+    async function poll(){try{render(await api('/api/state'))}catch(e){$('statusText').textContent='disconnected'}setTimeout(poll,1000)}
+    function preloadNext(){if(!state||!current)return;const q=state.playout_queue||[],idx=q.findIndex(c=>c.id===current.id),next=q[idx+1];if(next){const standby=videos[1-active];if(standby.dataset.id!==next.id){standby.src=next.url;standby.dataset.id=next.id;standby.load()}}}
+    async function startClip(clip){if(transitioning||!clip)return;transitioning=true;const next=videos[1-active];if(next.dataset.id!==clip.id){next.src=clip.url;next.dataset.id=clip.id;next.load()}next.currentTime=0;next.muted=videos[active].muted;try{await next.play();videos[active].classList.remove('active');next.classList.add('active');active=1-active;current=clip;started=true;setMetrics(clip);setTimeout(preloadNext,100);transitioning=false}catch(e){transitioning=false;toast('Tap Enable sound or the video to start playback') }}
+    async function advance(){if(!current||transitioning)return;try{await api(`/api/clips/${encodeURIComponent(current.id)}/consumed`,{method:'POST'});state=await api('/api/state');render(state);const next=(state.playout_queue||[])[0];if(next){await startClip(next)}else{videos[active].currentTime=0;await videos[active].play();toast('Generation caught up — replaying the buffer clip')}}catch(e){videos[active].currentTime=0;videos[active].play().catch(()=>{})}}
+    videos.forEach(v=>v.addEventListener('ended',advance));$('stage').addEventListener('click',()=>{if(!started&&state?.playout_queue?.length)startClip(state.playout_queue[0])});
+    $('sound').addEventListener('click',async e=>{e.stopPropagation();const muted=!videos[active].muted;videos.forEach(v=>v.muted=muted);$('sound').textContent=muted?'Enable sound':'Mute sound';if(!muted)videos[active].play().catch(()=>{})});
+    $('generate').addEventListener('click',async()=>{const button=$('generate');button.disabled=true;try{await api('/api/enqueue',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({prompt:$('prompt').value})});toast('Scene added to generation queue');await heartbeat()}catch(e){toast(e.message)}finally{button.disabled=false}});
+    heartbeat();setInterval(heartbeat,20000);poll();
+  </script>
+</body>
+</html>

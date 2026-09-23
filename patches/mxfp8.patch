@@ -1,0 +1,676 @@
+diff --git a/benchmarks/diffusion/bench_mxfp8_linear.py b/benchmarks/diffusion/bench_mxfp8_linear.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..d78cb7e38ac4691136e1ea7b5897318d773a909c
+--- /dev/null
++++ b/benchmarks/diffusion/bench_mxfp8_linear.py
+@@ -0,0 +1,69 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
++"""Compare CUDA SwiGLU + MXFP8 GEMM with its fused activation producer."""
++
++import argparse
++import json
++import statistics
++
++import torch
++
++from vllm_omni.diffusion.layers.activation import SiluAndMul
++from vllm_omni.diffusion.layers.mxfp8 import mxfp8_linear, mxfp8_quantize_swizzled, silu_mxfp8_linear
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--rows", type=int, default=2048)
++    parser.add_argument("--hidden", type=int, default=14336)
++    parser.add_argument("--output", type=int, default=5376)
++    parser.add_argument("--repeats", type=int, default=30)
++    args = parser.parse_args()
++    torch.manual_seed(7415)
++    device = torch.get_device_module()
++    x = torch.randn(args.rows, args.hidden * 2, device="cuda", dtype=torch.bfloat16)
++    weight = torch.randn(args.output, args.hidden, device="cuda", dtype=torch.bfloat16) * 0.01
++    q, scale = mxfp8_quantize_swizzled(weight)
++    activation = SiluAndMul()
++    paths = {
++        "unfused": lambda: mxfp8_linear(activation(x), q, scale),
++        "fused": lambda: silu_mxfp8_linear(x, q, scale),
++    }
++    with torch.inference_mode():
++        assert torch.equal(paths["unfused"](), paths["fused"]())
++        samples = {}
++        for name, fn in paths.items():
++            for _ in range(5):
++                fn()
++            device.synchronize()
++            measurements = []
++            for _ in range(args.repeats):
++                start, end = device.Event(enable_timing=True), device.Event(enable_timing=True)
++                start.record()
++                fn()
++                end.record()
++                end.synchronize()
++                measurements.append(start.elapsed_time(end))
++            samples[name] = {
++                "median_ms": statistics.median(measurements),
++                "min_ms": min(measurements),
++                "max_ms": max(measurements),
++                "samples_ms": measurements,
++            }
++    print(
++        json.dumps(
++            {
++                "shape": vars(args),
++                "torch": torch.__version__,
++                "warmup": 5,
++                "gpu": device.get_device_name(),
++                "byte_equal": True,
++                "results": samples,
++            },
++            indent=2,
++        )
++    )
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/recipes/MiniMaxAI/MiniMax-H3.md b/recipes/MiniMaxAI/MiniMax-H3.md
+index 9eac85ecea4f184a1170c895c274549b8761bb0c..cf5fb928f2d45fa454afec20863f287b4dc29e74 100644
+--- a/recipes/MiniMaxAI/MiniMax-H3.md
++++ b/recipes/MiniMaxAI/MiniMax-H3.md
+@@ -1468,3 +1468,26 @@ vllm serve "${MODEL_ROOT}/FL2VA" \
+ - [Supported models](../../docs/models/supported_models.md)
+ - [Video API](../../docs/serving/videos_api.md)
+ - [Diffusion parallelism](../../docs/user_guide/diffusion/parallelism/overview.md)
++
++### CUDA MXFP8 DiT projections
++
++On Blackwell, select online MXFP8 explicitly through the component config:
++
++```bash
++--diffusion-quantization-config '{"transformer":{"method":"mxfp8"},"text_encoder":null,"video_vae":null,"audio_vae":null}'
++```
++
++This converts the main DiT QKV/output and MLP projections after checkpoint
++loading and fixed adapter fusion. Token refinement, conditioning, AdaLN,
++compression gates, and patch/output projections retain their original precision.
++The native CUDA GEMM uses E4M3 operands and one E8M0 scale per 32 K elements.
++This is an approximate precision choice. It requires Blackwell and a PyTorch
++build exposing `torch.nn.functional.scaled_mm` with block-scaled recipes.
++Partitioned N must be divisible by 16 and K by 32. Offline MXFP8 checkpoints
++are not supported on CUDA by this path.
++
++At TP1 the MLP automatically fuses BF16 SwiGLU and activation quantization;
++TP>1 retains the ordinary activation and RowParallelLinear reduction.
++The fusion preserves the unfused CUDA activation and MXFP8 bytes. No FastH3
++adapter, AdaLN sidecar, fixed sampling schedule, or SP8 layout is required.
++Runtime adapter switching after conversion is not qualified by this recipe.
+diff --git a/tests/diffusion/quantization/test_cuda_mxfp8.py b/tests/diffusion/quantization/test_cuda_mxfp8.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..50a2ce8c73f26f7f360c26e6b621f5aa54d5ff58
+--- /dev/null
++++ b/tests/diffusion/quantization/test_cuda_mxfp8.py
+@@ -0,0 +1,81 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
++
++import pytest
++import torch
++
++from tests.helpers.mark import hardware_marks
++
++pytestmark = [pytest.mark.core_model, pytest.mark.diffusion]
++
++
++@pytest.mark.cpu
++def test_h3_mxfp8_scope_preserves_conditioning(monkeypatch):
++    from vllm_omni.diffusion.models.minimax_h3.quantization import projection_quant_config
++    from vllm_omni.platforms import current_omni_platform
++    from vllm_omni.quantization.mxfp8_config import DiffusionMXFP8Config
++
++    monkeypatch.setattr(current_omni_platform, "is_cuda", lambda: True)
++    config = DiffusionMXFP8Config(ignored_layers=["blocks.1.attn.qkv_proj"])
++    for prefix in ("blocks.0.attn.qkv_proj", "blocks.1.attn.out_proj", "blocks.2.mlp.fc1", "blocks.49.mlp.fc2"):
++        assert projection_quant_config(config, prefix) is config
++    for prefix in (
++        "condition_proj",
++        "blocks.0.adaln_proj.linear",
++        "blocks.0.attn.to_gate_compress",
++        "token_refiner.blocks.0.mlp.fc1",
++        "final_layer.adaln_proj.linear",
++    ):
++        assert projection_quant_config(config, prefix) is None
++    assert config.ignored_layers == ["blocks.1.attn.qkv_proj"]
++    ordinary = object()
++    assert projection_quant_config(ordinary, "condition_proj") is ordinary
++
++
++@pytest.fixture
++def cuda_device():
++    if not torch.cuda.is_available() or torch.cuda.get_device_capability()[0] not in (10, 12):
++        pytest.skip("requires Blackwell")
++    if not hasattr(torch.nn.functional, "scaled_mm"):
++        pytest.skip("requires public block-scaled GEMM API")
++    return torch.device("cuda")
++
++
++@pytest.mark.cuda
++@pytest.mark.parametrize("_hardware", [pytest.param(None, marks=hardware_marks(res={"cuda": ["B200"]}, num_cards=1))])
++@pytest.mark.parametrize("rows,hidden", [(1, 32), (127, 96), (137, 128), (256, 512), (11992, 14336)])
++def test_swiglu_matches_vllm_bytes(cuda_device, rows, hidden, _hardware):
++    from vllm_omni.diffusion.layers.activation import SiluAndMul
++    from vllm_omni.diffusion.layers.mxfp8 import mxfp8_quantize_swizzled, silu_mul_mxfp8_cuda
++
++    generator = torch.Generator(device=cuda_device).manual_seed(1101)
++    x = torch.randn(rows, 2 * hidden, dtype=torch.bfloat16, device=cuda_device, generator=generator)
++    reference = SiluAndMul().forward_cuda(x)
++    expected_q, expected_scale = mxfp8_quantize_swizzled(reference)
++    q, scale, activation = silu_mul_mxfp8_cuda(x, return_bf16=True)
++    assert torch.equal(activation.view(torch.uint8), reference.view(torch.uint8))
++    assert torch.equal(q.view(torch.uint8), expected_q.view(torch.uint8))
++    assert torch.equal(scale, expected_scale)
++
++
++@pytest.mark.cuda
++@pytest.mark.parametrize("_hardware", [pytest.param(None, marks=hardware_marks(res={"cuda": ["B200"]}, num_cards=1))])
++@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16])
++@pytest.mark.parametrize("rows", [0, 1, 137])
++def test_native_gemm_shape_and_accuracy(cuda_device, dtype, rows, _hardware):
++    from vllm_omni.quantization.mxfp8_config import CUDAMxfp8OnlineLinearMethod
++
++    torch.manual_seed(71)
++    layer = torch.nn.Linear(128, 64, bias=False, device=cuda_device, dtype=dtype)
++    weight = layer.weight.detach().clone()
++    method = CUDAMxfp8OnlineLinearMethod()
++    method.process_weights_after_loading(layer)
++    x = torch.randn(2, rows, 128, device=cuda_device, dtype=dtype)
++    actual = method.apply(layer, x)
++    assert actual.shape == (2, rows, 64)
++    assert actual.dtype == dtype
++    if rows:
++        expected = torch.nn.functional.linear(x.float(), weight.float())
++        relative_rms = (actual.float() - expected).square().mean().sqrt() / expected.square().mean().sqrt()
++        assert relative_rms.item() < 0.06
++        assert torch.isfinite(actual).all()
+diff --git a/vllm_omni/diffusion/layers/mxfp8.py b/vllm_omni/diffusion/layers/mxfp8.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..397b320c4be96220b2382561e27f098c6ec76801
+--- /dev/null
++++ b/vllm_omni/diffusion/layers/mxfp8.py
+@@ -0,0 +1,302 @@
++# SPDX-License-Identifier: Apache-2.0
++"""MXFP8 producers: e4m3 payload plus one E8M0 scale per 32 elements along K,
++the scales in the cuBLASLt ``SWIZZLE_32_4_4`` layout that
++``torch.nn.functional.scaled_mm(..., BlockWise1x32)`` consumes on Blackwell GPUs.
++
++Scale ``(r, c)`` of the ``[rows, K/32]`` scale matrix lives at byte
++``((r // 128) * ceil(K/32 / 4) + c // 4) * 512 + (r % 32) * 16 + ((r % 128) // 32) * 4 + c % 4``,
++rows padded to 128 and scale columns to 4, padding zero. Exponent
++``e = ceil(log2(amax / 448))`` exactly from the float bits; ``q = e4m3(x * 2**-e)``;
++scale byte ``e + 127``. Every producer quantizes the bf16-rounded value the
++unfused bf16 kernel stores, so each is byte-exact against that kernel followed
++by ``mxfp8_quantize_swizzled`` (itself byte-exact vs ``flashinfer.mxfp8_quantize``).
++"""
++
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
++
++from __future__ import annotations
++
++import torch
++from vllm.triton_utils import tl, triton
++from vllm.triton_utils import tldevice as libdevice
++
++_E4M3 = torch.float8_e4m3fn
++
++
++def _scale_numel(rows: int, k: int) -> int:
++    n_groups = k // 32
++    return -(-rows // 128) * 128 * (-(-n_groups // 4) * 4)
++
++
++@triton.jit
++def _mx_e8m0_from_amax(amax):
++    bits = amax.to(tl.int32, bitcast=True)
++    e0 = ((bits >> 23) & 0xFF) - 135
++    # amax / 2**e0 lies in [256, 512); bump e0 when it exceeds 448 = 1.75 * 2**8
++    the = (((e0 + 135) << 23) | 0x600000).to(tl.float32, bitcast=True)
++    e = e0 + (amax > the).to(tl.int32)
++    e = tl.maximum(e, -127)
++    inv = ((127 - e) << 23).to(tl.float32, bitcast=True)
++    return e + 127, inv
++
++
++@triton.jit
++def _mx_scale_offsets(r, c, n_col_blocks):
++    tile = (r // 128) * n_col_blocks + (c // 4)
++    return tile * 512 + (r % 32) * 16 + ((r % 128) // 32) * 4 + (c % 4)
++
++
++@triton.jit
++def _mxfp8_quant_kernel(
++    x_ptr,
++    q_ptr,
++    s_ptr,
++    rows,
++    k,
++    n_groups,
++    n_col_blocks,
++    stride_x,
++    BLOCK_R: tl.constexpr,  # noqa: N803
++    G: tl.constexpr,  # noqa: N803
++):
++    pid_r = tl.program_id(0)
++    pid_g = tl.program_id(1)
++    r = pid_r * BLOCK_R + tl.arange(0, BLOCK_R)
++    g = pid_g * G + tl.arange(0, G)
++    c = pid_g * (G * 32) + tl.arange(0, G * 32)
++    rmask = r < rows
++    mask = rmask[:, None] & (c < k)[None, :]
++    x = tl.load(x_ptr + r[:, None].to(tl.int64) * stride_x + c[None, :], mask=mask, other=0.0).to(tl.float32)
++    x3 = tl.reshape(x, [BLOCK_R, G, 32])
++    amax = tl.max(tl.abs(x3), axis=2)
++    sbyte, inv = _mx_e8m0_from_amax(amax)
++    q = tl.reshape(x3 * inv[:, :, None], [BLOCK_R, G * 32])
++    tl.store(
++        q_ptr + r[:, None].to(tl.int64) * k + c[None, :],
++        q.to(tl.float8e4nv),
++        mask=mask,
++    )
++    smask = rmask[:, None] & (g < n_groups)[None, :]
++    tl.store(
++        s_ptr + _mx_scale_offsets(r[:, None], g[None, :], n_col_blocks),
++        sbyte.to(tl.uint8),
++        mask=smask,
++    )
++
++
++def can_use_mxfp8_swizzled(x: torch.Tensor) -> bool:
++    """Row-major floating CUDA 2D tensor with K % 32 == 0, outside torch.compile."""
++    return (
++        x.is_cuda
++        and x.ndim == 2
++        and x.dtype in (torch.bfloat16, torch.float16, torch.float32)
++        and x.stride(-1) == 1
++        and x.shape[-1] % 32 == 0
++        and not torch.compiler.is_compiling()
++    )
++
++
++def _alloc(rows: int, k: int, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
++    q = torch.empty(rows, k, dtype=_E4M3, device=device)
++    s = torch.zeros(_scale_numel(rows, k), dtype=torch.uint8, device=device)
++    return q, s
++
++
++def mxfp8_quantize_swizzled(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
++    """bf16 ``[rows, k]`` -> ``(fp8 [rows, k], swizzled e8m0 scale bytes)``."""
++    if not can_use_mxfp8_swizzled(x):
++        raise ValueError("expected a row-major floating CUDA [rows, k] tensor, k % 32 == 0")
++    rows, k = x.shape
++    q, s = _alloc(rows, k, x.device)
++    if rows == 0:
++        return q, s
++    n_groups = k // 32
++    n_col_blocks = -(-n_groups // 4)
++    block_r, g = 32, 8
++    grid = (triton.cdiv(rows, block_r), triton.cdiv(n_groups, g))
++    with torch.get_device_module().device(x.device):
++        _mxfp8_quant_kernel[grid](
++            x,
++            q,
++            s,
++            rows,
++            k,
++            n_groups,
++            n_col_blocks,
++            x.stride(0),
++            BLOCK_R=block_r,
++            G=g,
++            num_warps=4,
++        )
++    return q, s
++
++
++@triton.jit
++def _bf16_round(x):
++    # Explicit conversion pair preserves the CUDA kernel's two BF16 roundings.
++    # Unlike the integer rounding shortcut this also preserves NaN conversion.
++    return tl.inline_asm_elementwise(
++        "{ .reg .b16 h; cvt.rn.bf16.f32 h, $1; cvt.f32.bf16 $0, h; }",
++        constraints="=f,f",
++        args=[x],
++        dtype=tl.float32,
++        is_pure=True,
++        pack=1,
++    )
++
++
++@triton.jit
++def _cuda_silu_product(gate, up):
++    # The installed vLLM SM120 SASS uses expf range reduction and corrected
++    # division gate / (1 + expf(-gate)), then BF16 round, FMUL, BF16 round.
++    # tl.sigmoid uses a different approximation: never assume byte identity.
++    act = _bf16_round(libdevice.div_rn(gate, 1.0 + libdevice.exp(-gate)))
++    # Current generic CUDA act_and_mul keeps its (up + beta), beta=+0, add.
++    # Preserve its signed-zero behavior too; an ordinary +0 can be optimized out.
++    up_zero = tl.inline_asm_elementwise(
++        "add.rn.f32 $0, $1, 0f00000000;",
++        constraints="=f,f",
++        args=[up],
++        dtype=tl.float32,
++        is_pure=True,
++        pack=1,
++    )
++    return _bf16_round(libdevice.mul_rn(act, up_zero))
++
++
++@triton.jit
++def _silu_mxfp8_cuda_kernel(
++    X,  # noqa: N803
++    Q,  # noqa: N803
++    S,  # noqa: N803
++    Y,  # noqa: N803
++    rows,
++    hidden,
++    groups,
++    col_blocks,
++    stride_row,
++    STORE_BF16: tl.constexpr,  # noqa: N803
++    BLOCK_R: tl.constexpr,  # noqa: N803
++    G: tl.constexpr,  # noqa: N803
++):
++    r = tl.program_id(0) * BLOCK_R + tl.arange(0, BLOCK_R)
++    g = tl.program_id(1) * G + tl.arange(0, G)
++    c = tl.program_id(1) * (G * 32) + tl.arange(0, G * 32)
++    mask = (r < rows)[:, None] & (c < hidden)[None, :]
++    base = X + r[:, None].to(tl.int64) * stride_row
++    gate = tl.load(base + c[None, :], mask, other=0).to(tl.float32)
++    up = tl.load(base + hidden + c[None, :], mask, other=0).to(tl.float32)
++    prod = _cuda_silu_product(gate, up)
++    if STORE_BF16:
++        tl.store(Y + r[:, None].to(tl.int64) * hidden + c[None, :], prod, mask)
++    p3 = tl.reshape(prod, [BLOCK_R, G, 32])
++    amax = tl.max(tl.abs(p3), axis=2)
++    scale_byte, inv = _mx_e8m0_from_amax(amax)
++    quant = tl.reshape(p3 * inv[:, :, None], [BLOCK_R, G * 32])
++    tl.store(Q + r[:, None].to(tl.int64) * hidden + c[None, :], quant.to(tl.float8e4nv), mask)
++    tl.store(
++        S + _mx_scale_offsets(r[:, None], g[None, :], col_blocks),
++        scale_byte.to(tl.uint8),
++        (r < rows)[:, None] & (g < groups)[None, :],
++    )
++
++
++def silu_mul_mxfp8_cuda(x: torch.Tensor, *, return_bf16: bool = False):
++    """BF16 [M, 2K] gate|up -> E4M3 [M,K], padded swizzled E8M0 bytes.
++
++    return_bf16 additionally returns the rounded activation for validation.
++    """
++    if (
++        not x.is_cuda
++        or x.dtype != torch.bfloat16
++        or x.ndim != 2
++        or x.stride(1) != 1
++        or x.shape[1] % 64
++        or torch.compiler.is_compiling()
++    ):
++        raise ValueError("Expected resident row-major BF16 [M,2K], K multiple of 32, outside compile")
++    rows, twice = x.shape
++    hidden = twice // 2
++    q, s = _alloc(rows, hidden, x.device)
++    y = torch.empty((rows, hidden), dtype=torch.bfloat16, device=x.device) if return_bf16 else q
++    if rows:
++        groups = hidden // 32
++        with torch.get_device_module().device(x.device):
++            _silu_mxfp8_cuda_kernel[(triton.cdiv(rows, 16), triton.cdiv(groups, 8))](
++                x,
++                q,
++                s,
++                y,
++                rows,
++                hidden,
++                groups,
++                triton.cdiv(groups, 4),
++                x.stride(0),
++                STORE_BF16=return_bf16,
++                BLOCK_R=16,
++                G=8,
++                num_warps=4,
++                enable_fp_fusion=True,
++                # vLLM's installed CUDA SASS uses non-FTZ exp/div arithmetic.
++                # Triton's libdevice reflection otherwise defaults to FTZ.
++                enable_reflect_ftz=False,
++            )
++    return (q, s, y) if return_bf16 else (q, s)
++
++
++def mxfp8_scaled_mm(
++    quantized: torch.Tensor,
++    weight: torch.Tensor,
++    activation_scale: torch.Tensor,
++    weight_scale: torch.Tensor,
++    *,
++    output_dtype: torch.dtype = torch.bfloat16,
++    bias: torch.Tensor | None = None,
++    use_fast_accum: bool = False,
++) -> torch.Tensor:
++    """Multiply E4M3 operands with swizzled E8M0 scales, one scale per 32 values.
++
++    Weight is stored as [N,K]. Keep this import lazy: the block-scaled public
++    PyTorch API is required only by callers explicitly selecting MXFP8.
++    """
++    from torch.nn.functional import ScalingType, SwizzleType, scaled_mm
++
++    return scaled_mm(
++        quantized,
++        weight.t(),
++        scale_a=activation_scale.view(torch.float8_e8m0fnu),
++        scale_b=weight_scale.view(torch.float8_e8m0fnu),
++        scale_recipe_a=ScalingType.BlockWise1x32,
++        scale_recipe_b=ScalingType.BlockWise1x32,
++        swizzle_a=SwizzleType.SWIZZLE_32_4_4,
++        swizzle_b=SwizzleType.SWIZZLE_32_4_4,
++        bias=bias,
++        output_dtype=output_dtype,
++        use_fast_accum=use_fast_accum,
++    )
++
++
++@torch.library.custom_op("vllm_omni::mxfp8_linear", mutates_args=())
++def mxfp8_linear(x: torch.Tensor, weight: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
++    """Opaque quantize/GEMM boundary for regional compilation."""
++    q, activation_scale = mxfp8_quantize_swizzled(x.reshape(-1, x.shape[-1]).contiguous())
++    out = mxfp8_scaled_mm(q, weight, activation_scale, scale)
++    return out.reshape(*x.shape[:-1], weight.shape[0])
++
++
++@mxfp8_linear.register_fake
++def _mxfp8_linear_fake(x, weight, scale):
++    return x.new_empty((*x.shape[:-1], weight.shape[0]))
++
++
++@torch.library.custom_op("vllm_omni::silu_mxfp8_linear", mutates_args=())
++def silu_mxfp8_linear(x: torch.Tensor, weight: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
++    """Fuse CUDA-compatible BF16 SwiGLU rounding and MXFP8 quantization."""
++    q, activation_scale = silu_mul_mxfp8_cuda(x.reshape(-1, x.shape[-1]).contiguous())
++    out = mxfp8_scaled_mm(q, weight, activation_scale, scale)
++    return out.reshape(*x.shape[:-1], weight.shape[0])
++
++
++@silu_mxfp8_linear.register_fake
++def _silu_mxfp8_linear_fake(x, weight, scale):
++    return x.new_empty((*x.shape[:-1], weight.shape[0]))
+diff --git a/vllm_omni/diffusion/models/minimax_h3/minimax_h3_transformer.py b/vllm_omni/diffusion/models/minimax_h3/minimax_h3_transformer.py
+index 5662a964119d790079839bae24663aa01d260b34..359a90464b2354160c39a37095df7e4d84a85f53 100644
+--- a/vllm_omni/diffusion/models/minimax_h3/minimax_h3_transformer.py
++++ b/vllm_omni/diffusion/models/minimax_h3/minimax_h3_transformer.py
+@@ -56,6 +56,7 @@ from vllm_omni.diffusion.models.host_weight_contract import FinalLayoutModelCont
+ from vllm_omni.platforms import current_omni_platform
+ 
+ from .fasth3 import _resolve_native_target
++from .quantization import projection_quant_config
+ 
+ if TYPE_CHECKING:
+     from vllm.model_executor.layers.quantization.base_config import (
+@@ -433,7 +434,7 @@ class MiniMaxH3Attention(nn.Module):
+             total_num_kv_heads=self.total_num_heads,
+             bias=False,
+             params_dtype=_BF16_DTYPE,
+-            quant_config=quant_config,
++            quant_config=projection_quant_config(quant_config, f"{prefix}.qkv_proj"),
+             prefix=f"{prefix}.qkv_proj",
+             return_bias=True,
+         )
+@@ -449,7 +450,7 @@ class MiniMaxH3Attention(nn.Module):
+             bias=False,
+             input_is_parallel=True,
+             params_dtype=_BF16_DTYPE,
+-            quant_config=quant_config,
++            quant_config=projection_quant_config(quant_config, f"{prefix}.out_proj"),
+             prefix=f"{prefix}.out_proj",
+         )
+         # VSA compression gate. A FastH3 VSA artifact assigns this projection
+@@ -457,7 +458,7 @@ class MiniMaxH3Attention(nn.Module):
+         # created only once the loader knows a VSA artifact is coming.
+         self.to_gate_compress: ColumnParallelLinear | None = None
+         self._gate_hidden_size = arch.hidden_size
+-        self._gate_quant_config = quant_config
++        self._gate_quant_config = projection_quant_config(quant_config, f"{prefix}.to_gate_compress")
+         self._gate_prefix = f"{prefix}.to_gate_compress"
+         from .attention.fastvideo_h3 import MiniMaxH3VSAImpl
+ 
+@@ -718,7 +719,7 @@ class MiniMaxH3MLP(nn.Module):
+             bias=False,
+             gather_output=False,
+             params_dtype=_BF16_DTYPE,
+-            quant_config=quant_config,
++            quant_config=projection_quant_config(quant_config, f"{prefix}.fc1"),
+             prefix=f"{prefix}.fc1",
+         )
+         self.act_fn = SiluAndMul()
+@@ -730,12 +731,24 @@ class MiniMaxH3MLP(nn.Module):
+             bias=False,
+             input_is_parallel=True,
+             params_dtype=_BF16_DTYPE,
+-            quant_config=quant_config,
++            quant_config=projection_quant_config(quant_config, f"{prefix}.fc2"),
+             prefix=f"{prefix}.fc2",
+         )
+ 
+     def forward(self, x: torch.Tensor) -> torch.Tensor:
+         hidden, _ = self.fc1(x)
++        from vllm_omni.quantization.mxfp8_config import CUDAMxfp8OnlineLinearMethod
++
++        if (
++            isinstance(self.fc2.quant_method, CUDAMxfp8OnlineLinearMethod)
++            and self.fc2.tp_size == 1
++            and hidden.dtype == torch.bfloat16
++            and not self.fc2._forward_hooks
++            and not self.fc2._forward_pre_hooks
++        ):
++            from vllm_omni.diffusion.layers.mxfp8 import silu_mxfp8_linear
++
++            return silu_mxfp8_linear(hidden, self.fc2.weight, self.fc2.weight_scale)
+         hidden = self.act_fn(hidden)
+         out, _ = self.fc2(hidden)
+         return out
+@@ -774,7 +787,7 @@ class MiniMaxH3AdalnProj(nn.Module):
+             bias=True,
+             gather_output=True,
+             params_dtype=_BF16_DTYPE,
+-            quant_config=quant_config,
++            quant_config=projection_quant_config(quant_config, f"{prefix}.linear"),
+             prefix=f"{prefix}.linear",
+         )
+ 
+@@ -1208,7 +1221,7 @@ class MiniMaxH3DiTModel(nn.Module):
+             bias=True,
+             gather_output=True,
+             params_dtype=_BF16_DTYPE,
+-            quant_config=quant_config,
++            quant_config=projection_quant_config(quant_config, "condition_proj"),
+             prefix="condition_proj",
+         )
+         self.time_embedder = MiniMaxH3TimeEmbedder(
+diff --git a/vllm_omni/diffusion/models/minimax_h3/quantization.py b/vllm_omni/diffusion/models/minimax_h3/quantization.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..0fd9baa527534a3d354d583f5866d15172d2cf52
+--- /dev/null
++++ b/vllm_omni/diffusion/models/minimax_h3/quantization.py
+@@ -0,0 +1,15 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
++"""Model-local CUDA MXFP8 scope; checkpoint fusion stays in the normal loader."""
++
++from vllm_omni.platforms import current_omni_platform
++from vllm_omni.quantization.mxfp8_config import DiffusionMXFP8Config
++
++
++def projection_quant_config(config, prefix):
++    """Keep conditioning, AdaLN, VSA gates and token refinement in BF16."""
++    if not isinstance(config, DiffusionMXFP8Config) or not current_omni_platform.is_cuda():
++        return config
++    if prefix.startswith("blocks.") and prefix.endswith((".attn.qkv_proj", ".attn.out_proj", ".mlp.fc1", ".mlp.fc2")):
++        return config
++    return None
+diff --git a/vllm_omni/quantization/mxfp8_config.py b/vllm_omni/quantization/mxfp8_config.py
+index 28a91574b792d5efbd7b5d7fe596a12b87eaf1c1..81cbdfb697b578982105b6192d45c263bf3aace3 100644
+--- a/vllm_omni/quantization/mxfp8_config.py
++++ b/vllm_omni/quantization/mxfp8_config.py
+@@ -146,6 +146,10 @@ class DiffusionMXFP8Config(QuantizationConfig):
+                         "or use online MXFP8 mode without is_checkpoint_mxfp8_serialized."
+                     )
+                 return VllmMxfp8OnlineLinearMethod()
++            if current_omni_platform.is_cuda():
++                if self.is_checkpoint_mxfp8_serialized:
++                    raise NotImplementedError("CUDA MXFP8 currently supports online BF16/FP16 checkpoints only")
++                return CUDAMxfp8OnlineLinearMethod()
+             raise NotImplementedError(
+                 "DiffusionMXFP8Config (W8A8 MXFP8) is currently only supported "
+                 "on NPU (Ascend) and XPU (Intel) platforms."
+@@ -311,7 +315,7 @@ class MXFPLinearMethodBase(LinearMethodBase, ABC):
+         ori_dtype = x.dtype
+         x = x.reshape(-1, ori_shape[-1])
+         output = self._apply_inner(layer, x, bias, ori_dtype)
+-        return output.reshape(*ori_shape[:-1], -1)
++        return output.reshape(*ori_shape[:-1], output.shape[-1])
+ 
+ 
+ # ---------------------------------------------------------------------------
+@@ -543,3 +547,37 @@ class VllmMxfp8OnlineLinearMethod(_VllmMxfp8OnlineBase):
+         if len(ori_shape) > 2:
+             output = output.reshape(*ori_shape[:-1], -1)
+         return output
++
++
++class CUDAMxfp8OnlineLinearMethod(_LazyWeightMixin, MXFPLinearMethodBase):
++    """CUDA W8A8 with E8M0 scales and native Blackwell block-scaled GEMM.
++
++    Conversion runs after the final checkpoint shard (including any fixed
++    adapter fusion) has been loaded. The shared loader preserves TP sharding.
++    """
++
++    def process_weights_after_loading(self, layer: Module) -> None:
++        from vllm_omni.diffusion.layers.mxfp8 import mxfp8_quantize_swizzled
++
++        capability = current_omni_platform.get_device_capability(layer.weight.device.index)
++        if capability is None or capability.major not in (10, 12):
++            raise ValueError("CUDA MXFP8 requires a Blackwell GPU")
++        if layer.weight.shape[0] % 16 or layer.weight.shape[1] % 32:
++            raise ValueError("CUDA MXFP8 requires partitioned N divisible by 16 and K divisible by 32")
++        if not hasattr(torch.nn.functional, "scaled_mm"):
++            raise RuntimeError("CUDA MXFP8 requires PyTorch's public block-scaled scaled_mm API")
++        weight, scale = mxfp8_quantize_swizzled(layer.weight.detach().contiguous())
++        replace_parameter(layer, "weight", weight)
++        layer.register_buffer("weight_scale", scale.view(torch.float8_e8m0fnu))
++
++    def _quantize_activation(self, x: torch.Tensor) -> tuple:
++        from vllm_omni.diffusion.layers.mxfp8 import mxfp8_quantize_swizzled
++
++        return mxfp8_quantize_swizzled(x.contiguous())
++
++    def _quant_matmul(self, x_q, x_scale, layer, bias, ori_dtype):
++        from vllm_omni.diffusion.layers.mxfp8 import mxfp8_scaled_mm
++
++        if x_q.shape[0] == 0:
++            return torch.empty((0, layer.weight.shape[0]), dtype=ori_dtype, device=x_q.device)
++        return mxfp8_scaled_mm(x_q, layer.weight, x_scale, layer.weight_scale, bias=bias, output_dtype=ori_dtype)

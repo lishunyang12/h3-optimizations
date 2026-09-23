@@ -1,0 +1,848 @@
+diff --git a/recipes/MiniMaxAI/MiniMax-H3.md b/recipes/MiniMaxAI/MiniMax-H3.md
+index cf5fb928f2d45fa454afec20863f287b4dc29e74..15a643a826798b51455feec1a79b4d55e1d9ab75 100644
+--- a/recipes/MiniMaxAI/MiniMax-H3.md
++++ b/recipes/MiniMaxAI/MiniMax-H3.md
+@@ -1491,3 +1491,37 @@ TP>1 retains the ordinary activation and RowParallelLinear reduction.
+ The fusion preserves the unfused CUDA activation and MXFP8 bytes. No FastH3
+ adapter, AdaLN sidecar, fixed sampling schedule, or SP8 layout is required.
+ Runtime adapter switching after conversion is not qualified by this recipe.
++
++### Optional video VAE optimizations
++
++Enable video decoder MXFP8 separately from DiT quantization:
++
++```bash
++--diffusion-quantization-config '{"transformer":null,"text_encoder":null,"video_vae":{"method":"mxfp8"},"audio_vae":null}'
++```
++
++This approximate mode quantizes the decoder's QKV, attention output and two MLP
++weights directly from the FP32 checkpoint. Residuals, normalization, encoder,
++convolutions and audio VAE keep their existing precision. Activations use the
++existing FP16 decode boundary; `ignored_layers` can exempt decoder projections.
++A global quantization setting does not implicitly select VAE quantization.
++
++For the canonical 1280x704, 362-frame decode (latent `[1,24,107,44,80]`),
++`VLLM_OMNI_H3_VAE_BATCHING=paired` balances spatial tiles across pairs of temporal
++windows. `mixed` additionally batches local tile decodes at batch sizes 4/2/1 (a three-tile
++tail splits into 2+1 to avoid the observed FP16 batch-three drift), preserving
++attention-output projection calls at their original batch-one geometry. Both
++require native distributed VAE tiling and reject incompatible geometry. The
++normal decode and chunk-consumer APIs share this path. Other geometries continue
++to use the default implementation when this option is unset.
++
++`VLLM_OMNI_H3_VAE_GATHER_OVERLAP=1` submits paired gathers on a separate stream.
++It requires nonblocking NCCL; all communication and output streams drain before
++return or error propagation. Only the output rank allocates receive storage.
++`VLLM_OMNI_H3_VAE_AUDIO_OVERLAP=1` overlaps audio with the complete video decode
++on CUDA while keeping both residency contexts alive. It increases concurrent
++memory use and does not alter the audio-first chunked MP4 mux path.
++
++These options are independent and disabled by default. Batch scheduling and
++stream overlap require their own output comparison; MXFP8 is approximate even
++when the scheduling operations preserve the reference ordering.
+diff --git a/tests/diffusion/models/minimax_h3/test_vae_mxfp8_batching.py b/tests/diffusion/models/minimax_h3/test_vae_mxfp8_batching.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..de377408a451119537912bfe1450a21f7ec6706c
+--- /dev/null
++++ b/tests/diffusion/models/minimax_h3/test_vae_mxfp8_batching.py
+@@ -0,0 +1,103 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
++
++import pytest
++import torch
++
++from tests.helpers.mark import hardware_test
++
++pytestmark = [pytest.mark.core_model, pytest.mark.diffusion]
++
++
++@pytest.mark.cpu
++@pytest.mark.parametrize("world", [1, 2, 4, 8, 16])
++@pytest.mark.parametrize("windows,tiles", [(1, 1), (3, 7), (21, 28)])
++def test_schedule_covers_each_tile_once(world, windows, tiles):
++    from vllm_omni.diffusion.models.minimax_h3.vae_batching import jobs
++
++    schedule = jobs(windows, tiles, world)
++    flattened = [job for row in schedule for rank in row for job in rank]
++    assert len(flattened) == len(set(flattened)) == windows * tiles
++    assert set(flattened) == {(window, tile) for window in range(windows) for tile in range(tiles)}
++    for row in schedule:
++        lengths = [len(rank) for rank in row]
++        assert max(lengths) - min(lengths) <= 1
++        assert len({window for rank in row for window, _ in rank}) <= 2
++
++
++@hardware_test(res={"cuda": ["B200"]}, num_cards=1)
++@pytest.mark.parametrize("rows", [1, 137])
++def test_vae_fp32_weights_quantized_before_fp16_rounding(rows):
++    from vllm_omni.diffusion.models.minimax_h3.quantization import VideoVAEMXFP8Linear
++    from vllm_omni.platforms import current_omni_platform
++
++    capability = current_omni_platform.get_device_capability()
++    if capability is None or capability.major not in (10, 12):
++        pytest.skip("requires Blackwell")
++    torch.manual_seed(713)
++    linear = torch.nn.Linear(128, 64, device="cuda", dtype=torch.float32)
++    # Place values across FP8 rounding boundaries that FP16 conversion can move.
++    with torch.no_grad():
++        linear.weight[:, :32] = torch.linspace(0.0001, 1.7502, 32, device="cuda")
++    quantized = VideoVAEMXFP8Linear(linear, torch.device("cuda"))
++    weight = linear.weight.detach().reshape(64, 4, 32)
++    exponent = torch.ceil(torch.log2(weight.abs().amax(dim=-1) / 448)).clamp(min=-127)
++    expected = (weight / torch.exp2(exponent).unsqueeze(-1)).to(torch.float8_e4m3fn).reshape(64, 128)
++    assert torch.equal(quantized.weight.view(torch.uint8), expected.view(torch.uint8))
++    x = torch.randn(1, rows, 128, device="cuda", dtype=torch.float32)
++    with torch.autocast("cuda", dtype=torch.float16):
++        actual = quantized(x)
++        reference = linear(x)
++    assert actual.dtype == torch.float16
++    assert torch.isfinite(actual).all()
++    relative_rms = (
++        actual.float() - reference.float()
++    ).square().mean().sqrt() / reference.float().square().mean().sqrt()
++    assert relative_rms < 0.06
++    with pytest.raises(RuntimeError, match="autocast"):
++        quantized(x)
++
++
++@pytest.mark.cpu
++@pytest.mark.parametrize("count", [0, 2, 362])
++def test_paired_full_output_owns_uint8_storage(monkeypatch, count):
++    from vllm_omni.diffusion.models.minimax_h3.vae import MiniMaxH3VideoVAE
++
++    monkeypatch.setenv("VLLM_OMNI_H3_VAE_BATCHING", "paired")
++    vae = MiniMaxH3VideoVAE.__new__(MiniMaxH3VideoVAE)
++    torch.nn.Module.__init__(vae)
++    tile = torch.tensor([0.0, 0.5, 1.0]).reshape(1, 3, 1, 1, 1)
++
++    def decode_chunks(latent, *, on_chunk):
++        for _ in range(count):
++            on_chunk(tile)
++
++    monkeypatch.setattr(vae, "decode_with_chunks", decode_chunks)
++    if count == 2:
++        with pytest.raises(RuntimeError, match="expected 362"):
++            vae.decode_latent(torch.empty(0))
++        return
++    output = vae.decode_latent(torch.empty(0))
++    assert output.dtype == torch.uint8
++    if count == 0:
++        assert output.shape == (1, 3, 0, 0, 0)
++    else:
++        assert output.shape == (1, 3, 362, 1, 1)
++        assert torch.equal(output[:, :, 0, 0, 0], torch.tensor([[0, 128, 255]], dtype=torch.uint8))
++        tile.zero_()
++        assert output[0, 2].eq(255).all()
++
++
++@pytest.mark.cpu
++@pytest.mark.parametrize("world", [2, 4, 8, 16])
++def test_mixed_schedule_preserves_consumer_order_without_batch_three(world):
++    from vllm_omni.diffusion.models.minimax_h3.vae_batching import batch_plan, jobs
++
++    schedule = jobs(world=world)
++    for rank in range(world):
++        batches = batch_plan(rank, world)
++        assert all(len(batch) in (1, 2, 4) for batch in batches)
++        expected = [job for round_jobs in schedule for job in round_jobs[rank]]
++        assert [job for batch in batches for job in batch] == expected
++        # Batching must not move a tile across its pair's gather boundary.
++        assert all(len({window // 2 for window, tile in batch}) == 1 for batch in batches)
+diff --git a/vllm_omni/diffusion/models/minimax_h3/ops/vae/__init__.py b/vllm_omni/diffusion/models/minimax_h3/ops/vae/__init__.py
+index 247e072c82b94262a24c49ffc11307eb4d739653..fbd533b71ca5f82f67a103d5a173ab582e93b9e7 100644
+--- a/vllm_omni/diffusion/models/minimax_h3/ops/vae/__init__.py
++++ b/vllm_omni/diffusion/models/minimax_h3/ops/vae/__init__.py
+@@ -184,6 +184,7 @@ def install_h3_vae_optimizations(
+     decoder: nn.Module,
+     *,
+     device: torch.device,
++    preserve_linear_dtype: bool = False,
+ ) -> bool:
+     """Install the operators selected for ``device`` once."""
+ 
+@@ -199,8 +200,9 @@ def install_h3_vae_optimizations(
+ 
+     # The H3 decode path always uses FP16 CUDA autocast. Persisting these
+     # rounded decoder-block weights avoids rebuilding the same casts per tile.
+-    for linear in linears:
+-        linear.to(dtype=torch.float16)
++    if not preserve_linear_dtype:
++        for linear in linears:
++            linear.to(dtype=torch.float16)
+ 
+     for block in decoder.transformer_blocks:
+         block.ff._omni_silu_and_mul = SiluAndMul()
+diff --git a/vllm_omni/diffusion/models/minimax_h3/pipeline_minimax_h3.py b/vllm_omni/diffusion/models/minimax_h3/pipeline_minimax_h3.py
+index 8fc1514efca50c739c73035080f4607beba60c6a..15a329de65d5886f4d23178923d769607f0591d3 100644
+--- a/vllm_omni/diffusion/models/minimax_h3/pipeline_minimax_h3.py
++++ b/vllm_omni/diffusion/models/minimax_h3/pipeline_minimax_h3.py
+@@ -1039,9 +1039,15 @@ class MiniMaxH3Pipeline(
+         # deliberately limits explicit component selection to dit/text_encoder,
+         # so VAEs stay resident for new configurations.
+         component_load_device = torch.device("cpu") if legacy_manual_components else self.device
++        from vllm_omni.quantization.component_config import ComponentQuantizationConfig
++
++        video_quant = None
++        if isinstance(od_config.quantization_config, ComponentQuantizationConfig):
++            video_quant = od_config.quantization_config.component_configs.get("video_vae")
+         self.video_vae = MiniMaxH3VideoVAE(
+             os.path.join(vae_model_path, "video_vae"),
+             device=self.device,
++            quant_config=video_quant,
+             load_device=component_load_device,
+             decode_only=not self.load_vae_encoder,
+             trust_remote_code=od_config.trust_remote_code,
+@@ -1979,6 +1985,36 @@ class MiniMaxH3Pipeline(
+         # through the VAE decode peak. Decoding needs only the ViT decoder
+         # half of the VAE, so the CNN encoder stays off the device.
+         self._release_stage_cache()
++        overlap = os.environ.get("VLLM_OMNI_H3_VAE_AUDIO_OVERLAP", "0")
++        if overlap not in ("0", "1"):
++            raise ValueError("VLLM_OMNI_H3_VAE_AUDIO_OVERLAP must be 0 or 1")
++        if overlap == "1":
++            if self.device.type != "cuda":
++                raise ValueError("H3 VAE audio overlap requires CUDA")
++            module = torch.get_device_module(self.device)
++            caller = module.current_stream(self.device)
++            stream = module.Stream(device=self.device)
++            # Keep both residency contexts alive until the side stream drains,
++            # including exceptional video exits. No staging buffer may be
++            # offloaded while the audio decoder still reads it.
++            with self._component_on_device(self.audio_vae):
++                with self._component_on_device(self.video_vae.decoder_component):
++                    stream.wait_stream(caller)
++                    audio_latent.record_stream(stream)
++                    try:
++                        with module.stream(stream):
++                            audio = self.audio_vae.decode_latent(audio_latent)
++                        with current_omni_platform.create_autocast_context(
++                            device_type=self.device.type,
++                            dtype=torch.float16,
++                            enabled=True,
++                        ):
++                            video = self.video_vae.decode_latent(video_latent)
++                    finally:
++                        stream.synchronize()
++                    audio.record_stream(caller)
++            video = video[..., :height, :width].contiguous()
++            return video, self._offload_model_cpu_stage_output(audio)
+         with self._component_on_device(self.video_vae.decoder_component):
+             with current_omni_platform.create_autocast_context(
+                 device_type=self.device.type,
+diff --git a/vllm_omni/diffusion/models/minimax_h3/quantization.py b/vllm_omni/diffusion/models/minimax_h3/quantization.py
+index 0fd9baa527534a3d354d583f5866d15172d2cf52..b6f581e3e5cc94e6924765160770168abc14c7aa 100644
+--- a/vllm_omni/diffusion/models/minimax_h3/quantization.py
++++ b/vllm_omni/diffusion/models/minimax_h3/quantization.py
+@@ -2,6 +2,8 @@
+ # SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
+ """Model-local CUDA MXFP8 scope; checkpoint fusion stays in the normal loader."""
+ 
++import torch
++
+ from vllm_omni.platforms import current_omni_platform
+ from vllm_omni.quantization.mxfp8_config import DiffusionMXFP8Config
+ 
+@@ -13,3 +15,63 @@ def projection_quant_config(config, prefix):
+     if prefix.startswith("blocks.") and prefix.endswith((".attn.qkv_proj", ".attn.out_proj", ".mlp.fc1", ".mlp.fc2")):
+         return config
+     return None
++
++
++class VideoVAEMXFP8Linear(torch.nn.Module):
++    """Online MXFP8 decoder projection; preserve FP32 checkpoint weights until quantization."""
++
++    def __init__(self, linear, device):
++        from vllm_omni.diffusion.layers.mxfp8 import mxfp8_quantize_swizzled
++
++        super().__init__()
++        self.in_features = linear.in_features
++        self.out_features = linear.out_features
++        home = linear.weight.device
++        weight, scale = mxfp8_quantize_swizzled(linear.weight.detach().to(device).contiguous())
++        self.register_buffer("weight", weight.to(home))
++        self.register_buffer("weight_scale", scale.to(home))
++        self.register_buffer("bias", None if linear.bias is None else linear.bias.detach().to(dtype=torch.float16))
++
++    def forward(self, x):
++        from vllm_omni.diffusion.layers.mxfp8 import mxfp8_quantize_swizzled, mxfp8_scaled_mm
++
++        # H3 residual and norm state stays FP32. nn.Linear would autocast its
++        # activation to FP16, so make the same boundary explicit here.
++        if not torch.is_autocast_enabled("cuda") or torch.get_autocast_dtype("cuda") != torch.float16:
++            raise RuntimeError("H3 video VAE MXFP8 requires FP16 CUDA autocast")
++        activation, scale = mxfp8_quantize_swizzled(x.to(torch.float16).reshape(-1, self.in_features).contiguous())
++        output = mxfp8_scaled_mm(activation, self.weight, scale, self.weight_scale, output_dtype=torch.float16)
++        output = output.reshape(*x.shape[:-1], self.out_features)
++        return output if self.bias is None else output + self.bias
++
++
++def quantize_video_vae_decoder(decoder, config, device):
++    """Convert only the four decoder-block projections, after exact-op installation."""
++    from vllm.model_executor.layers.quantization.utils.quant_utils import is_layer_skipped
++
++    from vllm_omni.diffusion.models.minimax_h3.ops.vae import _decoder_block_linears
++
++    if not isinstance(config, DiffusionMXFP8Config) or config.is_checkpoint_mxfp8_serialized:
++        raise ValueError("H3 video VAE supports online MXFP8 only")
++    capability = current_omni_platform.get_device_capability()
++    if device.type != "cuda" or capability is None or capability.major not in (10, 12):
++        raise ValueError("H3 video VAE MXFP8 requires Blackwell CUDA")
++    if not hasattr(torch.nn.functional, "scaled_mm"):
++        raise RuntimeError("H3 video VAE MXFP8 requires PyTorch block-scaled scaled_mm")
++    linears = _decoder_block_linears(decoder)
++    if linears is None or any(
++        x.weight.dtype != torch.float32 or x.in_features % 32 or x.out_features % 16 for x in linears
++    ):
++        raise ValueError("unsupported H3 video VAE decoder projection contract")
++    count = 0
++    for index, block in enumerate(decoder.transformer_blocks):
++        for parent_name, name in (("attn", "to_qkv"), ("attn", "to_out"), ("ff", "w1"), ("ff", "w2")):
++            parent = getattr(block, parent_name)
++            prefix = f"video_vae.decoder.transformer_blocks.{index}.{parent_name}.{name}"
++            linear = getattr(parent, name)
++            if is_layer_skipped(prefix, config.ignored_layers):
++                linear.to(dtype=torch.float16)
++                continue
++            setattr(parent, name, VideoVAEMXFP8Linear(linear, device))
++            count += 1
++    return count
+diff --git a/vllm_omni/diffusion/models/minimax_h3/vae.py b/vllm_omni/diffusion/models/minimax_h3/vae.py
+index c614ea0f2934015a206c357f1f78237a38683794..17c1d64be2c696df2fb2a8658035e86c72734625 100644
+--- a/vllm_omni/diffusion/models/minimax_h3/vae.py
++++ b/vllm_omni/diffusion/models/minimax_h3/vae.py
+@@ -332,6 +332,7 @@ class MiniMaxH3VideoVAE(nn.Module, DistributedVaeMixin):
+         *,
+         device: torch.device,
+         load_device: torch.device | None = None,
++        quant_config=None,
+         encode_only: bool = False,
+         decode_only: bool = False,
+         trust_remote_code: bool = False,
+@@ -361,7 +362,13 @@ class MiniMaxH3VideoVAE(nn.Module, DistributedVaeMixin):
+             install_h3_vae_optimizations(
+                 decoder,
+                 device=device,
++                preserve_linear_dtype=quant_config is not None,
+             )
++            if quant_config is not None:
++                from .quantization import quantize_video_vae_decoder
++
++                count = quantize_video_vae_decoder(decoder, quant_config, device)
++                logger.info("H3 video VAE MXFP8: converted %d decoder projections", count)
+         install_temporal_stream_patches(self.remote.model)
+         self.model = self.remote.model
+         self._stager = None
+@@ -959,6 +966,26 @@ class MiniMaxH3VideoVAE(nn.Module, DistributedVaeMixin):
+     def decode_latent(self, latent: torch.Tensor) -> torch.Tensor:
+         if getattr(self, "encode_only", False):
+             raise RuntimeError("MiniMax H3 encode-only video VAE cannot decode latents")
++        if os.environ.get("VLLM_OMNI_H3_VAE_BATCHING", "none") != "none":
++            output = None
++            position = 0
++
++            def consume(frames):
++                nonlocal output, position
++                if output is None:
++                    output = torch.empty(
++                        (1, 3, 362, frames.shape[-2], frames.shape[-1]), dtype=torch.uint8, device=frames.device
++                    )
++                count = frames.shape[2]
++                output[:, :, position : position + count].copy_(frames.mul(255.0).round().to(torch.uint8))
++                position += count
++
++            self.decode_with_chunks(latent, on_chunk=consume)
++            if output is None:
++                return torch.empty((1, 3, 0, 0, 0), dtype=torch.uint8, device=latent.device)
++            if position != 362:
++                raise RuntimeError(f"Paired H3 VAE produced {position} frames, expected 362")
++            return output
+         with self._decode_tiling_context(latent):
+             decoded = self.model.decode_base(self._denormalize_latent(latent))
+         if decoded.dtype == torch.uint8:
+@@ -1016,6 +1043,39 @@ class MiniMaxH3VideoVAE(nn.Module, DistributedVaeMixin):
+         # so this path needs the same too-few-tiles fallback as the complete
+         # decode: without it a shape that leaves some ranks tileless hangs the
+         # gather instead of decoding rank-locally.
++        batching = os.environ.get("VLLM_OMNI_H3_VAE_BATCHING", "none")
++        if batching not in ("none", "paired", "mixed"):
++            raise ValueError("VLLM_OMNI_H3_VAE_BATCHING must be none, paired or mixed")
++        if batching != "none":
++            from .vae_batching import decode_pairs, geometry, mixed_decode
++            from .vae_parallel import VAEGroup
++
++            if group is None or z.device.type != "cuda":
++                raise ValueError("Paired H3 VAE requires CUDA and distributed VAE tiling")
++            denormalized = self._denormalize_latent(z)
++            geometry(self.model, denormalized)
++            world = VAEGroup(group)
++            overlap = os.environ.get("VLLM_OMNI_H3_VAE_GATHER_OVERLAP", "0")
++            if overlap not in ("0", "1"):
++                raise ValueError("VLLM_OMNI_H3_VAE_GATHER_OVERLAP must be 0 or 1")
++            stream = self.device_module.Stream(device=z.device) if overlap == "1" else None
++            if stream is not None and os.environ.get("TORCH_NCCL_BLOCKING_WAIT", "0") != "0":
++                raise ValueError("VAE gather overlap requires nonblocking NCCL")
++
++            def consume(frames, start, total):
++                del start, total
++                on_chunk(self._normalize_decoded_frames(self._revert_decoded_inplace(frames)))
++
++            context = (
++                mixed_decode(self.model, denormalized, world.rank_in_group, world.world_size)
++                if batching == "mixed"
++                else nullcontext()
++            )
++            with context:
++                decode_pairs(
++                    self.model, denormalized, world, consume if world.rank_in_group == 0 else None, gather_stream=stream
++                )
++            return
+         with self._decode_tiling_context(z):
+             decode_h3_chunks(self, z, on_chunk, group=group)
+ 
+diff --git a/vllm_omni/diffusion/models/minimax_h3/vae_batching.py b/vllm_omni/diffusion/models/minimax_h3/vae_batching.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..097f61181a9a350912e52fc59003d41bfdd3dbd1
+--- /dev/null
++++ b/vllm_omni/diffusion/models/minimax_h3/vae_batching.py
+@@ -0,0 +1,257 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
++"""H3 temporal/spatial tile scheduling, decoder batching, and ordered assembly."""
++
++from __future__ import annotations
++
++import types
++from contextlib import contextmanager
++from functools import lru_cache
++
++import torch
++
++
++@lru_cache(None)
++def jobs(windows=21, tiles=28, world=8):
++    if min(windows, tiles, world) < 1:
++        raise ValueError("VAE schedule dimensions must be positive")
++    rounds = []
++    for first in range(0, windows, 2):
++        count = min(2, windows - first) * tiles
++        rounds.append(
++            tuple(tuple((first + i // tiles, i % tiles) for i in range(r, count, world)) for r in range(world))
++        )
++    counts = tuple(sum(len(row[r]) for row in rounds) for r in range(world))
++    assert sum(counts) == windows * tiles
++    flat = [job for row in rounds for rank in row for job in rank]
++    assert len(flat) == len(set(flat)) == windows * tiles
++    assert set(flat) == {(w, t) for w in range(windows) for t in range(tiles)}
++    return tuple(rounds)
++
++
++def geometry(model, latent):
++    assert tuple(latent.shape) == (1, 24, 107, 44, 80) and latent.dtype == torch.float32
++    assert model.vae_ratio == 16 and model.vae_ratio_t == 4
++    assert model.tokens_chunk_size == 5 and model.token_overlap == 2
++    assert model.frame_pre_padding == 3 and model.frame_overlap == 5 and model.token_drop == 3
++    assert not model.training and not model.stack_tiling and not model.decoder_parallel
++    assert model.decoder_tiling and model.decoder_tile_size == 256
++    yi, yl, yo = model.split_tiles(704, True)
++    xi, xl, xo = model.split_tiles(1280, True)
++    assert len(yi) == 4 and len(xi) == 7 and set(yl + xl) == {256}
++    slices = tuple(
++        (slice(y // 16, (y + length) // 16), slice(x // 16, (x + k) // 16))
++        for y, length in zip(yi, yl)
++        for x, k in zip(xi, xl)
++    )
++    return slices, tuple(yo), tuple(xo)
++
++
++def assemble_spatial(model, tiles, y_overlap, x_overlap):
++    # Same sequence as checkpoint AutoencoderKL.tiled_decode after gathering:
++    # vertical blend, horizontal blend, trims, horizontal cats, vertical cat.
++    rows = [list(tiles[i * 7 : (i + 1) * 7]) for i in range(4)]
++    result_rows = []
++    for i, row in enumerate(rows):
++        result_row = []
++        for j, tile in enumerate(row):
++            if i > 0:
++                tile = model.blend(rows[i - 1][j], tile, y_overlap[i - 1], dim=-2)
++            if j > 0:
++                tile = model.blend(row[j - 1], tile, x_overlap[j - 1], dim=-1)
++            if i < len(rows) - 1:
++                tile = tile[..., : -y_overlap[i], :]
++            if j < len(row) - 1:
++                tile = tile[..., :, : -x_overlap[j]]
++            result_row.append(tile)
++        result_rows.append(torch.cat(result_row, dim=-1))
++    return torch.cat(result_rows, dim=-2)
++
++
++def decode_pairs(model, latent, group, callback, *, temporal_cat_dtype=None, gather_stream=None):
++    """Group wrapper requires world_size/rank_in_group/ranks/device_group/all_reduce."""
++    from vllm_omni.diffusion.models.minimax_h3.vae_parallel import (
++        _agree_on_failure,
++        _gather_stack_to_rank_zero,
++        _LeaderAssembler,
++    )
++
++    assert (callback is not None) == (group.rank_in_group == 0)
++    spatial, y_overlap, x_overlap = geometry(model, latent)
++    schedule = jobs(world=group.world_size)
++    rank = group.rank_in_group
++    assembler = (
++        _LeaderAssembler(model, callback, main_frames=17, overlap_frames=5, output_frames=362, device=latent.device)
++        if callback is not None
++        else None
++    )
++    local_error = None
++    tile_shape = (1, 3, 22, 256, 256)
++    tile_dtype = torch.float32
++    tile_count = 0
++    try:
++        for round_id, round_jobs in enumerate(schedule):
++            width = max(map(len, round_jobs))
++            # Uniform collective shape, including four padding tiles in the
++            # final round. Padding is never decoded or consumed by assembly.
++            packed = torch.empty((width, *tile_shape), device=latent.device, dtype=tile_dtype)
++            for slot, (window, tile) in enumerate(round_jobs[rank]):
++                if local_error is not None:
++                    packed[slot].zero_()
++                    continue
++                try:
++                    sy, sx = spatial[tile]
++                    clip = latent[:, :, window * 5 : window * 5 + 7, sy, sx]
++                    with torch.profiler.record_function(f"h3.vae.pair.tile.{window}.{tile}"):
++                        decoded = model.decode(clip)
++                    assert decoded.shape == (1, 3, 28, 256, 256) and decoded.dtype == tile_dtype
++                    # Blends are per frame. Gather only the original live
++                    # ranges, preserving FP32 until spatial blending finishes.
++                    packed[slot, :, :, :17].copy_(decoded[:, :, 3:20])
++                    packed[slot, :, :, 17:].copy_(decoded[:, :, 23:28])
++                    tile_count += 1
++                except BaseException as e:
++                    e.__traceback__ = None
++                    local_error = e
++                    packed[slot].zero_()
++            if len(round_jobs[rank]) < width:
++                packed[len(round_jobs[rank]) :].zero_()
++            if assembler is not None:
++                assembler.drain_previous_round()
++            with torch.profiler.record_function(f"h3.vae.pair.gather.{round_id}"):
++                if gather_stream is None:
++                    gathered = _gather_stack_to_rank_zero(packed, group)
++                else:
++                    from .vae_parallel import gather_on_stream
++
++                    gathered = gather_on_stream(packed, group, gather_stream)
++            if assembler is not None and gathered is not None:
++                # Assemble on the dedicated output stream, allowing the next
++                # pair's decoder to run concurrently. The original temporal
++                # assembler preserves callback order and the five-frame tail.
++                stream = assembler._stream
++                stream.wait_stream(
++                    gather_stream
++                    if gather_stream is not None
++                    else torch.get_device_module().current_stream(latent.device)
++                )
++                gathered.record_stream(stream)
++                try:
++                    with torch.get_device_module().stream(stream):
++                        for window in range(round_id * 2, min(round_id * 2 + 2, 21)):
++                            parts = [None] * 28
++                            for owner, owner_jobs in enumerate(round_jobs):
++                                for slot, (w, t) in enumerate(owner_jobs):
++                                    if w == window:
++                                        parts[t] = gathered[owner, slot]
++                            assert all(t is not None for t in parts)
++                            segment = assemble_spatial(model, parts, y_overlap, x_overlap)
++                            if temporal_cat_dtype is not None:
++                                segment = segment.to(temporal_cat_dtype)
++                            assembler.push(segment)
++                        assembler.finish_round()
++                except BaseException as e:
++                    assembler._remember_error(e)
++            del gathered, packed
++        if assembler is not None:
++            assembler.finalize()
++    finally:
++        # Include non-output ranks and exceptional exits. No gather may still
++        # access a send/receive allocation when this request is released or
++        # the all-rank failure agreement enters the original caller stream.
++        try:
++            if gather_stream is not None:
++                gather_stream.synchronize()
++        finally:
++            if assembler is not None:
++                assembler.synchronize()
++    callback_error = assembler.error if assembler is not None else None
++    if _agree_on_failure(group, latent.device, local_error is not None or callback_error is not None):
++        raise RuntimeError("Paired VAE failed after draining collectives") from (local_error or callback_error)
++    assert tile_count == sum(len(row[rank]) for row in schedule)
++    return dict(rank=rank, tile_calls=tile_count, gathers=len(schedule), windows=21, frames=362)
++
++
++@lru_cache(None)
++def batch_plan(rank, world=8):
++    batches = []
++    for round_jobs in jobs(world=world):
++        local = round_jobs[rank]
++        for start in range(0, len(local), 4):
++            batch = local[start : start + 4]
++            # The SP8 regression observed FP16 rounding drift at B3.
++            # Use the validated B4/B2/B1 geometries for an odd tail instead.
++            batches.extend((batch[:2], batch[2:]) if len(batch) == 3 else (batch,))
++    return tuple(batches)
++
++
++@contextmanager
++def mixed_decode(model, latent, rank, world=8):
++    """Yield measured calls, without changing existing exact-op counters.
++
++    Each original paired decode call still consumes its original tile. At the
++    first call in a B4 group, compute the group together and retain its outputs
++    until their original consumers run. Groups never cross a gather boundary. The only linear
++    override executes attention to_out at its original B1 shape and stride.
++    """
++    spatial, _, _ = geometry(model, latent)
++    plan = batch_plan(rank, world)
++    ordered = tuple(job for batch in plan for job in batch)
++    original_decode = model.decode
++    originals = []
++    stats = dict(tile_outputs=0, decoder_calls=0, batch_sizes=[], to_out_calls=0)
++    pending = []
++    batch_index = 0
++
++    def tile_view(job):
++        window, tile = job
++        sy, sx = spatial[tile]
++        return latent[:, :, window * 5 : window * 5 + 7, sy, sx]
++
++    def decode(self, clip):
++        nonlocal batch_index
++        expected = tile_view(ordered[stats["tile_outputs"]])
++        assert (clip.data_ptr(), clip.shape, clip.stride(), clip.dtype) == (
++            expected.data_ptr(),
++            expected.shape,
++            expected.stride(),
++            expected.dtype,
++        )
++        if not pending:
++            batch = plan[batch_index]
++            batch_index += 1
++            x = clip if len(batch) == 1 else torch.cat([tile_view(job) for job in batch], dim=0)
++            decoded = original_decode(x)
++            assert decoded.shape == (len(batch), 3, 28, 256, 256)
++            assert decoded.dtype == torch.float32
++            pending.extend(decoded[i : i + 1] for i in range(len(batch)))
++            stats["decoder_calls"] += 1
++            stats["batch_sizes"].append(len(batch))
++        stats["tile_outputs"] += 1
++        return pending.pop(0)
++
++    try:
++        for block in model.decoder.transformer_blocks:
++            module = block.attn.to_out
++            original = module.forward
++            originals.append((module, original))
++
++            def forward(self, x, _original=original):
++                assert x.ndim == 3 and x.shape[1:] == (1797, 2048)
++                assert x.dtype == torch.float16 and x.stride() == (1797 * 2048, 2048, 1)
++                stats["to_out_calls"] += x.shape[0]
++                if x.shape[0] == 1:
++                    return _original(x)
++                return torch.cat([_original(x[i : i + 1]) for i in range(x.shape[0])], dim=0)
++
++            module.forward = types.MethodType(forward, module)
++        model.decode = types.MethodType(decode, model)
++        yield stats
++        assert not pending and batch_index == len(plan)
++        assert stats["tile_outputs"] == len(ordered)
++        assert stats["decoder_calls"] == len(plan)
++        assert stats["to_out_calls"] == 36 * len(ordered)
++    finally:
++        model.decode = original_decode
++        for module, original in originals:
++            module.forward = original
+diff --git a/vllm_omni/diffusion/models/minimax_h3/vae_parallel.py b/vllm_omni/diffusion/models/minimax_h3/vae_parallel.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..b8bcb36b8f26635287413ce0dfc1716717e2b867
+--- /dev/null
++++ b/vllm_omni/diffusion/models/minimax_h3/vae_parallel.py
+@@ -0,0 +1,177 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
++"""H3 VAE gather, stream lifetime, failure agreement, and temporal output assembly."""
++
++from __future__ import annotations
++
++from collections.abc import Callable
++from typing import Any
++
++import torch
++import torch.distributed as dist
++
++DecodedChunkCallback = Callable[[torch.Tensor, int, int], None]
++
++
++def _gather_stack_to_rank_zero(segment: torch.Tensor, group: Any) -> torch.Tensor | None:
++    """Destination-only gather without a second full-size ``torch.cat``.
++
++    ``dist.gather`` writes directly into contiguous views of one leader-owned
++    ``[world_size, *segment.shape]`` allocation.  Non-leaders allocate no
++    receive tensor.
++    """
++    segment = segment.contiguous()
++    output = segment.new_empty((group.world_size, *segment.shape)) if group.rank_in_group == 0 else None
++    gather_list = list(output.unbind(0)) if output is not None else None
++    dist.gather(segment, gather_list=gather_list, dst=group.ranks[0], group=group.device_group)
++    return output
++
++
++class _LeaderAssembler:
++    """Serially join gathered segments while later windows decode."""
++
++    def __init__(
++        self,
++        model: Any,
++        callback: DecodedChunkCallback,
++        *,
++        main_frames: int,
++        overlap_frames: int,
++        output_frames: int,
++        device: torch.device,
++    ) -> None:
++        self._model = model
++        self._callback = callback
++        self._main_frames = main_frames
++        self._overlap_frames = overlap_frames
++        self._output_frames = output_frames
++        self._previous_overlap: torch.Tensor | None = None
++        self._write_pos = 0
++        self._error: BaseException | None = None
++        self._stream = torch.get_device_module().Stream(device=device) if device.type == "cuda" else None
++        self._round_done: torch.cuda.Event | None = None
++
++    def _remember_error(self, error: BaseException) -> None:
++        if self._error is None:
++            error.__traceback__ = None
++            self._error = error
++
++    def push(self, segment: torch.Tensor) -> None:
++        if self._error is not None:
++            return
++        try:
++            if self._stream is None:
++                self._push(segment)
++                return
++            self._stream.wait_stream(torch.get_device_module().current_stream(segment.device))
++            segment.record_stream(self._stream)
++            with torch.get_device_module().stream(self._stream):
++                self._push(segment)
++        except BaseException as error:
++            self._remember_error(error)
++
++    def _push(self, segment: torch.Tensor) -> None:
++        main = segment[:, :, : self._main_frames]
++        overlap = segment[:, :, self._main_frames :]
++        if self._previous_overlap is not None:
++            main = self._model.blend(self._previous_overlap, main, self._overlap_frames, dim=-3)
++        frame_count = min(int(main.shape[2]), self._output_frames - self._write_pos)
++        if frame_count > 0:
++            self._callback(main[:, :, :frame_count], self._write_pos, self._output_frames)
++            self._write_pos += frame_count
++        self._previous_overlap = overlap.clone()
++
++    def finish_round(self) -> None:
++        if self._stream is None or self._error is not None:
++            return
++        try:
++            self._round_done = torch.get_device_module().Event()
++            self._round_done.record(self._stream)
++        except BaseException as error:
++            self._remember_error(error)
++
++    def drain_previous_round(self) -> None:
++        if self._round_done is not None:
++            try:
++                self._round_done.synchronize()
++            except BaseException as error:
++                self._remember_error(error)
++            finally:
++                self._round_done = None
++
++    def finalize(self) -> None:
++        if self._error is not None:
++            return
++        try:
++            if self._previous_overlap is None:
++                raise RuntimeError("MiniMax H3 temporal chunk parallel produced no final overlap")
++            remaining = self._output_frames - self._write_pos
++            tail = self._previous_overlap[:, :, :remaining]
++            if self._stream is None:
++                self._emit_tail(tail)
++            else:
++                with torch.get_device_module().stream(self._stream):
++                    self._emit_tail(tail)
++        except BaseException as error:
++            self._remember_error(error)
++
++    def _emit_tail(self, tail: torch.Tensor) -> None:
++        if int(tail.shape[2]) > 0:
++            self._callback(tail, self._write_pos, self._output_frames)
++            self._write_pos += int(tail.shape[2])
++        if self._write_pos != self._output_frames:
++            raise RuntimeError(
++                f"MiniMax H3 temporal chunk parallel output length mismatch: "
++                f"frames={self._write_pos}/{self._output_frames}"
++            )
++
++    def synchronize(self) -> None:
++        if self._stream is not None:
++            try:
++                self._stream.synchronize()
++            except BaseException as error:
++                self._remember_error(error)
++
++    @property
++    def error(self) -> BaseException | None:
++        return self._error
++
++
++def _agree_on_failure(group: Any, device: torch.device, failed: bool) -> bool:
++    flag = torch.tensor([int(failed)], dtype=torch.int32, device=device)
++    result = group.all_reduce(flag, op=dist.ReduceOp.MAX)
++    return bool(result.item())
++
++
++def gather_on_stream(packed, group, stream):
++    """Keep the NCCL completion dependency off the decoder caller stream.
++
++    The existing synchronous Python gather waits for NCCL on its current CUDA
++    stream. Here that current stream is dedicated to gather, so the subsequent
++    decoder round may be submitted on the original caller stream. The leader
++    must wait on this gather stream before consuming the returned tensor.
++    """
++
++    caller = torch.get_device_module().current_stream(packed.device)
++    if stream == caller:
++        raise RuntimeError("VAE gather overlap requires a distinct stream")
++    stream.wait_stream(caller)
++    # `packed` was allocated/written on caller. Its Python lifetime ends after
++    # this round is submitted, potentially before the gather stream finishes.
++    packed.record_stream(stream)
++    with torch.get_device_module().stream(stream):
++        return _gather_stack_to_rank_zero(packed, group)
++
++
++class VAEGroup:
++    """Minimal view of the checkpoint's spatial process group."""
++
++    def __init__(self, group):
++        self.device_group = group
++        self.world_size = dist.get_world_size(group)
++        self.rank_in_group = dist.get_rank(group)
++        self.ranks = dist.get_process_group_ranks(group)
++
++    def all_reduce(self, value, op):
++        dist.all_reduce(value, op=op, group=self.device_group)
++        return value

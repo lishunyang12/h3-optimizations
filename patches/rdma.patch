@@ -1,0 +1,787 @@
+diff --git a/docs/user_guide/diffusion/parallelism/flashinfer_ulysses.md b/docs/user_guide/diffusion/parallelism/flashinfer_ulysses.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..bb5889df10f14cb299c5ef873569416b4053b5d9
+--- /dev/null
++++ b/docs/user_guide/diffusion/parallelism/flashinfer_ulysses.md
+@@ -0,0 +1,33 @@
++# Optional FlashInfer PCIe/RDMA transport
++
++Strict Ulysses can use FlashInfer's registered PCIe transport when explicitly
++selected. It requires a FlashInfer build containing the PCIe
++`UlyssesCommunicator` API from
++[FlashInfer #4876](https://github.com/flashinfer-ai/flashinfer/pull/4876), plus
++libibverbs/libmlx5 development headers and a supported local GPU/NIC topology.
++That dependency is not yet part of this change or installed automatically.
++
++```bash
++export VLLM_OMNI_ULYSSES_A2A_BACKEND=flashinfer-pcie
++export VLLM_OMNI_FLASHINFER_ULYSSES_REQUIRE_RDMA=1
++export FLASHINFER_ULYSSES_PCIE_ROUTE=rdma
++# Size for the largest per-rank attention operand in the chosen workload.
++export VLLM_OMNI_FLASHINFER_ULYSSES_MAX_BYTES=268435456
++# Add to the existing server command:
++# --ulysses-a2a-permute
++```
++
++RDMA is required by default for this explicit backend. An unavailable RDMA
++route or an operand exceeding capacity raises an error. Setting
++`VLLM_OMNI_FLASHINFER_ULYSSES_REQUIRE_RDMA=0` permits PCIe routes and a logged
++NCCL fallback for cold initialization failure or larger operands. Kernel
++execution errors are propagated. The normal Ulysses transport remains the
++default when this backend is not selected.
++
++Registered Q/K/V/gate and reverse-output slots remain separate and are reused
++across layers. Process-group teardown collectively closes the communicator
++before releasing its registered storage. Selection does not enable model
++projection overlap, attention quantization, or a different sparsity algorithm.
++
++The RDMA route supports batch size 1. Required-RDMA mode rejects larger batches
++before entering the native collective; optional mode uses NCCL for those batches.
+diff --git a/tests/diffusion/attention/test_flashinfer_ulysses_cuda.py b/tests/diffusion/attention/test_flashinfer_ulysses_cuda.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..5efe5674f5b870b1d7eff216c038b2d0f9151855
+--- /dev/null
++++ b/tests/diffusion/attention/test_flashinfer_ulysses_cuda.py
+@@ -0,0 +1,81 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
++
++import os
++from datetime import timedelta
++
++import pytest
++import torch
++import torch.distributed as dist
++import torch.multiprocessing as mp
++
++from tests.helpers.mark import hardware_test
++
++pytestmark = [pytest.mark.core_model, pytest.mark.diffusion]
++
++
++def _worker(rank, rendezvous):
++    from vllm_omni.diffusion.distributed.flashinfer_ulysses import (
++        _gather_impl,
++        _nccl_gather_heads,
++        _nccl_scatter_heads,
++        _scatter_impl,
++        clear_flashinfer_ulysses_communicators,
++    )
++    from vllm_omni.platforms import current_omni_platform
++
++    device = torch.device("cuda", rank)
++    current_omni_platform.set_device(device)
++    dist.init_process_group(
++        "nccl", init_method=f"file://{rendezvous}", rank=rank, world_size=2, timeout=timedelta(seconds=180)
++    )
++    try:
++        group = dist.group.WORLD
++        for batch, rows, dtype in [(1, 128, torch.bfloat16), (1, 64, torch.bfloat16), (1, 128, torch.float8_e4m3fn)]:
++            raw = torch.arange(batch * rows * 8 * 128, device=device).reshape(batch, rows, 8, 128)
++            x = ((raw % 101) / 100 + rank).to(dtype)[..., ::2]
++            references, outputs = [], []
++            for slot in ("q", "k", "v", "g"):
++                expected = _nccl_scatter_heads(x, group, 2)
++                actual = _scatter_impl(x, group.group_name, 2, slot, False)
++                assert torch.equal(expected.view(torch.uint8), actual.view(torch.uint8))
++                references.append(expected)
++                outputs.append(actual)
++            assert len({x.data_ptr() for x in outputs}) == 4
++            for expected, actual in zip(references, outputs, strict=True):
++                assert torch.equal(expected.view(torch.uint8), actual.view(torch.uint8))
++            reversed_actual = _gather_impl(outputs[0], group.group_name, 2, False)
++            reversed_expected = _nccl_gather_heads(references[0], group, 2)
++            assert torch.equal(reversed_actual.view(torch.uint8), reversed_expected.view(torch.uint8))
++            assert torch.equal(reversed_actual.view(torch.uint8), x.contiguous().view(torch.uint8))
++        x = torch.randn(2, 64, 8, 64, device=device, dtype=torch.bfloat16)
++        with pytest.raises(ValueError, match="batch=1"):
++            _scatter_impl(x, group.group_name, 2, "q", False)
++        with pytest.raises(ValueError, match="batch=1"):
++            _gather_impl(x, group.group_name, 2, False)
++        os.environ["VLLM_OMNI_FLASHINFER_ULYSSES_REQUIRE_RDMA"] = "0"
++        actual = _scatter_impl(x, group.group_name, 2, "q", False)
++        assert torch.equal(actual, _nccl_scatter_heads(x, group, 2))
++        assert torch.equal(_gather_impl(actual, group.group_name, 2, False), x)
++    finally:
++        clear_flashinfer_ulysses_communicators()
++        dist.destroy_process_group()
++
++
++@hardware_test(res={"cuda": ["B200"]}, num_cards=2)
++def test_two_rank_registered_rdma_matches_nccl(tmp_path, monkeypatch):
++    if torch.accelerator.device_count() < 2:
++        pytest.skip("requires two CUDA devices and RDMA topology")
++    pytest.importorskip("flashinfer.comm.ulysses")
++    monkeypatch.setenv("FLASHINFER_ULYSSES_PCIE_ROUTE", "rdma")
++    monkeypatch.setenv("VLLM_OMNI_FLASHINFER_ULYSSES_REQUIRE_RDMA", "1")
++    monkeypatch.setenv("VLLM_OMNI_FLASHINFER_ULYSSES_MAX_BYTES", str(4 * 1024**2))
++    context = mp.spawn(_worker, args=(str(tmp_path / "rdma-init"),), nprocs=2, join=False)
++    try:
++        if not context.join(timeout=300) and not context.join(timeout=30):
++            pytest.fail("RDMA workers exceeded their deadline")
++    finally:
++        for process in context.processes:
++            if process.is_alive():
++                process.terminate()
++            process.join(timeout=5)
+diff --git a/tests/diffusion/attention/test_ulysses_transport_interface.py b/tests/diffusion/attention/test_ulysses_transport_interface.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..3f06b820c70c522a37e0d82ad5791e14ca3be27d
+--- /dev/null
++++ b/tests/diffusion/attention/test_ulysses_transport_interface.py
+@@ -0,0 +1,55 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
++
++from types import SimpleNamespace
++
++import pytest
++import torch
++
++from vllm_omni.diffusion.attention.backends.abstract import AttentionMetadata
++from vllm_omni.diffusion.attention.parallel.ulysses import UlyssesParallelAttention
++
++pytestmark = [pytest.mark.core_model, pytest.mark.diffusion, pytest.mark.cpu]
++
++
++def _strategy():
++    group = SimpleNamespace(ulysses_group=object(), ulysses_world_size=2, ulysses_rank=0, ring_world_size=1)
++    strategy = UlyssesParallelAttention(group, 2, 1, False)
++    strategy._ulysses_a2a_permute = True
++    return strategy
++
++
++def test_exchange_keeps_gate_with_query_layout(monkeypatch):
++    strategy = _strategy()
++    calls = []
++
++    def scatter(tensor, slot):
++        calls.append(slot)
++        return tensor.repeat_interleave(2, dim=1)[:, :, :2].contiguous()
++
++    monkeypatch.setattr(strategy, "_scatter_heads", scatter)
++    q = torch.randn(1, 3, 4, 8)
++    metadata = AttentionMetadata(extra={"gate_compress": q.clone()})
++    query, key, value, metadata, ctx = strategy.pre_attention(q, q, q, metadata)
++    assert calls == ["q", "k", "v", "g"]
++    assert query.shape == key.shape == value.shape == metadata.extra["gate_compress"].shape == (1, 6, 2, 8)
++    assert not ctx.use_uaa
++
++
++def test_backend_selection_keeps_optional_dependency_lazy(monkeypatch):
++    from vllm_omni.diffusion.distributed import flashinfer_ulysses
++
++    def forbidden():
++        pytest.fail("default Ulysses must not inspect optional FlashInfer dependencies")
++
++    monkeypatch.setattr(flashinfer_ulysses, "ensure_flashinfer_pcie_available", forbidden)
++    monkeypatch.setenv("VLLM_OMNI_ULYSSES_A2A_BACKEND", "flashinfer-pcie")
++    assert _strategy()._ulysses_a2a_backend == "symmetric"
++
++
++def test_strict_validation_precedes_exchange(monkeypatch):
++    strategy = _strategy()
++    monkeypatch.setattr(strategy, "_exchange_qkv", lambda *args: pytest.fail("invalid heads reached transport"))
++    q = torch.zeros(1, 3, 3, 8)
++    with pytest.raises(ValueError, match="head_cnt divisible"):
++        strategy.pre_attention(q, q, q, None)
+diff --git a/vllm_omni/diffusion/attention/parallel/ulysses.py b/vllm_omni/diffusion/attention/parallel/ulysses.py
+index 28298c0a280e14d9094a965363ca291c453589a1..4ad0937409b8de06ba8c0e061403900b080b78df 100644
+--- a/vllm_omni/diffusion/attention/parallel/ulysses.py
++++ b/vllm_omni/diffusion/attention/parallel/ulysses.py
+@@ -254,15 +254,28 @@ class UlyssesParallelAttention:
+         self._gather_idx = gather_idx
+         self._use_sync = use_sync
+         self._ulysses_a2a_permute = ulysses_a2a_permute
++        self._ulysses_a2a_backend = "symmetric"
+         if _a2a_permute_enabled(
+             ulysses_a2a_permute,
+             scatter_idx,
+             gather_idx,
+             sp_group.ulysses_world_size,
+         ):
+-            from vllm_omni.diffusion.distributed.a2a_permute import ensure_a2a_permute_available
++            from vllm_omni.diffusion.distributed.flashinfer_ulysses import configured_backend
+ 
+-            ensure_a2a_permute_available()
++            self._ulysses_a2a_backend = configured_backend()
++            if self._ulysses_a2a_backend == "flashinfer-pcie":
++                from vllm_omni.diffusion.distributed.flashinfer_ulysses import (
++                    ensure_flashinfer_pcie_available,
++                )
++
++                ensure_flashinfer_pcie_available()
++            elif self._ulysses_a2a_backend == "symmetric":
++                from vllm_omni.diffusion.distributed.a2a_permute import ensure_a2a_permute_available
++
++                ensure_a2a_permute_available()
++            else:
++                raise ValueError("VLLM_OMNI_ULYSSES_A2A_BACKEND must be symmetric or flashinfer-pcie")
+ 
+     @property
+     def enabled(self) -> bool:
+@@ -272,6 +285,32 @@ class UlyssesParallelAttention:
+     def name(self) -> str:
+         return "ulysses"
+ 
++    def _scatter_heads(self, tensor: torch.Tensor, slot: str) -> torch.Tensor:
++        group_name = self._ulysses_pg.group_name
++        world_size = self._sp_group.ulysses_world_size
++        if self._ulysses_a2a_backend == "flashinfer-pcie":
++            from vllm_omni.diffusion.distributed.flashinfer_ulysses import flashinfer_ulysses_qkv_fwd
++
++            return flashinfer_ulysses_qkv_fwd(tensor, group_name, world_size, slot, self._use_sync)
++        from vllm_omni.diffusion.distributed.a2a_permute import ulysses_qkv_fwd
++
++        return ulysses_qkv_fwd(tensor, group_name, world_size)
++
++    def _exchange_qkv(self, query, key, value, attn_metadata):
++        """Exchange independent operands; subclasses may schedule producers between exchanges."""
++        return self._scatter_heads(query, "q"), self._scatter_heads(key, "k"), self._scatter_heads(value, "v")
++
++    def _gather_heads(self, tensor: torch.Tensor, ctx: _UlyssesCtx) -> torch.Tensor:
++        group_name = ctx.ulysses_pg.group_name
++        world_size = dist.get_world_size(ctx.ulysses_pg)
++        if self._ulysses_a2a_backend == "flashinfer-pcie":
++            from vllm_omni.diffusion.distributed.flashinfer_ulysses import flashinfer_ulysses_o_rev
++
++            return flashinfer_ulysses_o_rev(tensor, group_name, world_size, ctx.use_sync)
++        from vllm_omni.diffusion.distributed.a2a_permute import ulysses_o_rev
++
++        return ulysses_o_rev(tensor, group_name, world_size)
++
+     def pre_attention(
+         self,
+         query: torch.Tensor,
+@@ -526,14 +565,9 @@ class UlyssesParallelAttention:
+                 self._gather_idx,
+                 ulysses_world_size,
+             ):
+-                from vllm_omni.diffusion.distributed.a2a_permute import ulysses_qkv_fwd
+-
+-                group_name = self._ulysses_pg.group_name
+-                query = ulysses_qkv_fwd(query, group_name, ulysses_world_size)
+-                key = ulysses_qkv_fwd(key, group_name, ulysses_world_size)
+-                value = ulysses_qkv_fwd(value, group_name, ulysses_world_size)
++                query, key, value = self._exchange_qkv(query, key, value, attn_metadata)
+                 if gate_compress is not None:
+-                    gate_compress = ulysses_qkv_fwd(gate_compress, group_name, ulysses_world_size)
++                    gate_compress = self._scatter_heads(gate_compress, "g")
+             else:
+                 query = SeqAllToAll4D.apply(
+                     self._ulysses_pg, query, self._scatter_idx, self._gather_idx, self._use_sync
+@@ -666,13 +700,7 @@ class UlyssesParallelAttention:
+                 ctx.gather_idx,
+                 dist.get_world_size(ctx.ulysses_pg),
+             ):
+-                from vllm_omni.diffusion.distributed.a2a_permute import ulysses_o_rev
+-
+-                output_img = ulysses_o_rev(
+-                    output_img,
+-                    ctx.ulysses_pg.group_name,
+-                    dist.get_world_size(ctx.ulysses_pg),
+-                )
++                output_img = self._gather_heads(output_img, ctx)
+             else:
+                 output_img = SeqAllToAll4D.apply(
+                     ctx.ulysses_pg, output_img, ctx.gather_idx, ctx.scatter_idx, ctx.use_sync
+@@ -711,11 +739,5 @@ class UlyssesParallelAttention:
+             ctx.gather_idx,
+             dist.get_world_size(ctx.ulysses_pg),
+         ):
+-            from vllm_omni.diffusion.distributed.a2a_permute import ulysses_o_rev
+-
+-            return ulysses_o_rev(
+-                attn_output,
+-                ctx.ulysses_pg.group_name,
+-                dist.get_world_size(ctx.ulysses_pg),
+-            )
++            return self._gather_heads(attn_output, ctx)
+         return SeqAllToAll4D.apply(ctx.ulysses_pg, attn_output, ctx.gather_idx, ctx.scatter_idx, ctx.use_sync)
+diff --git a/vllm_omni/diffusion/distributed/flashinfer_ulysses.py b/vllm_omni/diffusion/distributed/flashinfer_ulysses.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..efabc21e2f2cce06b8318527b85708bd655f661f
+--- /dev/null
++++ b/vllm_omni/diffusion/distributed/flashinfer_ulysses.py
+@@ -0,0 +1,419 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
++"""Optional FlashInfer PCIe/RDMA transport for strict Ulysses attention.
++
++Communicators own separate registered Q/K/V/gate/output slots. All ranks must
++close them before destroying the process group. The default transport is
++unchanged; no model layout or producer scheduling is owned by this module.
++"""
++
++from __future__ import annotations
++
++import os
++import threading
++from dataclasses import dataclass, field
++from typing import Any
++
++import torch
++import torch.distributed as dist
++from torch.distributed.distributed_c10d import _resolve_process_group
++from vllm.logger import init_logger
++
++logger = init_logger(__name__)
++_BACKEND_ENV = "VLLM_OMNI_ULYSSES_A2A_BACKEND"
++_MAX_BYTES_ENV = "VLLM_OMNI_FLASHINFER_ULYSSES_MAX_BYTES"
++_REQUIRE_RDMA_ENV = "VLLM_OMNI_FLASHINFER_ULYSSES_REQUIRE_RDMA"
++_EXPECTED_BACKEND = "flashinfer-pcie"
++_LOCK = threading.RLock()
++
++
++def configured_backend() -> str:
++    """Return the explicitly selected optimized Ulysses implementation."""
++    return os.getenv(_BACKEND_ENV, "symmetric").strip().lower()
++
++
++def is_flashinfer_pcie_enabled() -> bool:
++    return configured_backend() == _EXPECTED_BACKEND
++
++
++def _require_rdma() -> bool:
++    value = os.getenv(_REQUIRE_RDMA_ENV, "1").strip().lower()
++    if value not in ("0", "1", "false", "true"):
++        raise ValueError(f"{_REQUIRE_RDMA_ENV} must be 0/1/false/true, got {value!r}")
++    return value in ("1", "true")
++
++
++def ensure_flashinfer_pcie_available() -> None:
++    """Validate the PR #4876 Python/API surface without compiling a kernel."""
++    try:
++        from flashinfer.comm import UlyssesCommunicator
++        from flashinfer.comm.ulysses import missing_ulysses_pcie_dependencies
++    except (ImportError, AttributeError) as exc:
++        raise RuntimeError(
++            "flashinfer-pcie requires FlashInfer PR #4876 (UlyssesCommunicator "
++            "with backend='pcie'); prepend its pinned source checkout to PYTHONPATH"
++        ) from exc
++
++    missing = missing_ulysses_pcie_dependencies()
++    if missing:
++        raise RuntimeError("flashinfer-pcie JIT dependencies are missing: " + ", ".join(missing))
++    methods = ["allocate_output", "input_buffer", "scatter_heads", "gather_heads", "close"]
++    for method in methods:
++        if not hasattr(UlyssesCommunicator, method):
++            raise RuntimeError(f"FlashInfer UlyssesCommunicator lacks required method {method!r}")
++
++
++def _configured_capacity(first_nbytes: int) -> int:
++    raw = os.getenv(_MAX_BYTES_ENV)
++    if raw is None or not raw.strip():
++        return first_nbytes
++    try:
++        capacity = int(raw)
++    except ValueError as exc:
++        raise ValueError(f"{_MAX_BYTES_ENV} must be a positive integer, got {raw!r}") from exc
++    if capacity <= 0:
++        raise ValueError(f"{_MAX_BYTES_ENV} must be positive, got {capacity}")
++    return capacity
++
++
++def _group_name(group: dist.ProcessGroup) -> str:
++    name = getattr(group, "group_name", None)
++    return str(name) if name is not None else f"process-group-{id(group)}"
++
++
++@dataclass
++class _PcieState:
++    group: dist.ProcessGroup
++    world_size: int
++    device: torch.device
++    capacity_bytes: int
++    communicator: Any | None = None
++    disabled_reason: str | None = None
++    outputs: dict[tuple[str, str, torch.dtype], torch.Tensor] = field(default_factory=dict)
++
++    def initialize(self, dtype: torch.dtype) -> bool:
++        """Collectively construct once; a clean cold-start failure falls back."""
++        if self.disabled_reason is not None:
++            return False
++        if self.communicator is not None:
++            return True
++
++        from flashinfer.comm import UlyssesCommunicator
++
++        try:
++            communicator = UlyssesCommunicator(
++                self.group,
++                max_bytes=self.capacity_bytes,
++                dtype=dtype,
++                backend="pcie",
++                device=self.device,
++            )
++        except Exception as exc:  # FlashInfer coordinates init cleanup across ranks.
++            if _require_rdma():
++                raise RuntimeError("required FlashInfer all-RDMA Ulysses initialization failed") from exc
++            self.disabled_reason = f"cold initialization failed ({type(exc).__name__}: {exc})"
++            logger.warning("FlashInfer PCIe Ulysses unavailable; using NCCL: %s", self.disabled_reason)
++            return False
++
++        if _require_rdma() and communicator.transport != "rdma":
++            observed = communicator.transport
++            communicator.close()
++            raise RuntimeError(
++                f"required FlashInfer all-RDMA Ulysses route was not selected; observed transport={observed!r}"
++            )
++
++        self.communicator = communicator
++        logger.info(
++            "FlashInfer PCIe Ulysses armed: group=%s world=%d device=%s transport=%s capacity=%d",
++            _group_name(self.group),
++            self.world_size,
++            self.device,
++            communicator.transport,
++            self.capacity_bytes,
++        )
++        return True
++
++    def output(self, x: torch.Tensor, *, op: str, slot: str) -> torch.Tensor:
++        assert self.communicator is not None
++        key = (slot, op, x.dtype)
++        out = self.outputs.get(key)
++        if out is None:
++            # allocate_output validates contiguity but never reads the values.
++            prototype = x if x.is_contiguous() else torch.empty(x.shape, dtype=x.dtype, device=x.device)
++            # PR #4876 permits a per-call element type on the PCIe backend.
++            # Always state it explicitly: the communicator default is fixed by
++            # the first collective, while callers may
++            # use E4M3 Q/K/V and retain BF16 for the reverse-O exchange.
++            out = self.communicator.allocate_output(
++                prototype,
++                op=op,
++                dtype=x.dtype,
++            )
++            self.outputs[key] = out
++            return out
++
++        batch, seq, heads, head_dim = x.shape
++        if op == "scatter_heads":
++            shape = (batch, seq * self.world_size, heads // self.world_size, head_dim)
++        elif op == "gather_heads":
++            shape = (batch, seq // self.world_size, heads * self.world_size, head_dim)
++        else:  # This adapter deliberately exposes only the two Ulysses transforms.
++            raise ValueError(f"unsupported cached FlashInfer Ulysses op: {op!r}")
++
++        # ``out`` may be a narrow view of a capacity-sized native allocation.
++        # as_strided checks against the backing storage, so it can safely form
++        # a different contiguous geometry without allocating or changing the
++        # registered base pointer.
++        strides = [1] * len(shape)
++        for index in range(len(shape) - 2, -1, -1):
++            strides[index] = strides[index + 1] * shape[index + 1]
++        return out.as_strided(shape, tuple(strides))
++
++    def scatter(self, x: torch.Tensor, *, slot: str) -> torch.Tensor:
++        assert self.communicator is not None
++        out = self.output(x, op="scatter_heads", slot=slot)
++        if x.is_contiguous():
++            source = x
++        else:
++            source = self.communicator.input_buffer(out, x.shape)
++            source.copy_(x)
++        return self.communicator.scatter_heads(source, out=out, dtype=source.dtype)
++
++    def gather(self, x: torch.Tensor, *, slot: str) -> torch.Tensor:
++        assert self.communicator is not None
++        out = self.output(x, op="gather_heads", slot=slot)
++        if x.is_contiguous():
++            source = x
++        else:
++            source = self.communicator.input_buffer(out, x.shape)
++            source.copy_(x)
++        return self.communicator.gather_heads(source, out=out, dtype=source.dtype)
++
++    def close(self) -> None:
++        # Preserve the handle and registered storage if collective close fails.
++        if self.communicator is not None:
++            self.communicator.close()
++        self.communicator = None
++        self.outputs.clear()
++
++
++_STATES: dict[tuple[str, torch.device], _PcieState] = {}
++
++
++def _state_for(x: torch.Tensor, group: dist.ProcessGroup, world_size: int) -> _PcieState:
++    actual_world_size = dist.get_world_size(group)
++    if actual_world_size != world_size:
++        raise RuntimeError(
++            f"FlashInfer PCIe Ulysses world-size mismatch: caller={world_size}, process-group={actual_world_size}"
++        )
++    key = (_group_name(group), x.device)
++    with _LOCK:
++        state = _STATES.get(key)
++        if state is None:
++            state = _PcieState(
++                group=group,
++                world_size=world_size,
++                device=x.device,
++                capacity_bytes=_configured_capacity(x.nbytes),
++            )
++            _STATES[key] = state
++        elif state.group is not group or state.world_size != world_size:
++            raise RuntimeError("FlashInfer PCIe Ulysses process-group identity changed for a live cache entry")
++        return state
++
++
++def _nccl_scatter_heads(
++    x: torch.Tensor,
++    group: dist.ProcessGroup,
++    world_size: int,
++) -> torch.Tensor:
++    batch, local_seq, heads, head_dim = x.shape
++    local_heads = heads // world_size
++    send = x.reshape(batch, local_seq, world_size, local_heads, head_dim).transpose(0, 2).contiguous()
++    recv = torch.empty_like(send)
++    dist.all_to_all_single(recv, send, group=group)
++    return (
++        recv.reshape(local_seq * world_size, batch, local_heads, head_dim)
++        .transpose(0, 1)
++        .contiguous()
++        .reshape(batch, local_seq * world_size, local_heads, head_dim)
++    )
++
++
++def _nccl_gather_heads(
++    x: torch.Tensor,
++    group: dist.ProcessGroup,
++    world_size: int,
++) -> torch.Tensor:
++    batch, global_seq, local_heads, head_dim = x.shape
++    local_seq = global_seq // world_size
++    heads = local_heads * world_size
++    send = (
++        x.reshape(batch, world_size, local_seq, local_heads, head_dim)
++        .transpose(0, 3)
++        .transpose(0, 1)
++        .contiguous()
++        .reshape(world_size, local_heads, local_seq, batch, head_dim)
++    )
++    recv = torch.empty_like(send)
++    dist.all_to_all_single(recv, send, group=group)
++    return (
++        recv.reshape(heads, local_seq, batch, head_dim)
++        .transpose(0, 2)
++        .contiguous()
++        .reshape(batch, local_seq, heads, head_dim)
++    )
++
++
++def _scatter_impl(
++    x: torch.Tensor,
++    group_name: str,
++    world_size: int,
++    slot: str,
++    use_sync: bool,
++) -> torch.Tensor:
++    group = _resolve_process_group(group_name)
++    if x.shape[0] != 1:
++        if _require_rdma():
++            raise ValueError("required FlashInfer RDMA Ulysses supports batch=1 only")
++        out = _nccl_scatter_heads(x, group, world_size)
++        if use_sync:
++            torch.accelerator.synchronize(x.device)
++        return out
++    state = _state_for(x, group, world_size)
++    if x.nbytes > state.capacity_bytes and _require_rdma():
++        raise RuntimeError(
++            "required FlashInfer all-RDMA Ulysses operand exceeds configured "
++            f"capacity: operand={x.nbytes}, capacity={state.capacity_bytes}"
++        )
++    if x.nbytes <= state.capacity_bytes and state.initialize(x.dtype):
++        output = state.scatter(x, slot=slot)
++        if use_sync:
++            torch.accelerator.synchronize(x.device)
++        return output
++    if x.nbytes > state.capacity_bytes:
++        logger.warning_once(
++            "FlashInfer PCIe Ulysses operand %d exceeds capacity %d; using NCCL for this geometry",
++            x.nbytes,
++            state.capacity_bytes,
++        )
++    out = _nccl_scatter_heads(x, group, world_size)
++    if use_sync:
++        torch.accelerator.synchronize(x.device)
++    return out
++
++
++def _gather_impl(
++    x: torch.Tensor,
++    group_name: str,
++    world_size: int,
++    use_sync: bool,
++) -> torch.Tensor:
++    group = _resolve_process_group(group_name)
++    if x.shape[0] != 1:
++        if _require_rdma():
++            raise ValueError("required FlashInfer RDMA Ulysses supports batch=1 only")
++        out = _nccl_gather_heads(x, group, world_size)
++        if use_sync:
++            torch.accelerator.synchronize(x.device)
++        return out
++    state = _state_for(x, group, world_size)
++    if x.nbytes > state.capacity_bytes and _require_rdma():
++        raise RuntimeError(
++            "required FlashInfer all-RDMA Ulysses operand exceeds configured "
++            f"capacity: operand={x.nbytes}, capacity={state.capacity_bytes}"
++        )
++    if x.nbytes <= state.capacity_bytes and state.initialize(x.dtype):
++        output = state.gather(x, slot="o")
++        if use_sync:
++            torch.accelerator.synchronize(x.device)
++        return output
++    if x.nbytes > state.capacity_bytes:
++        logger.warning_once(
++            "FlashInfer PCIe Ulysses operand %d exceeds capacity %d; using NCCL for this geometry",
++            x.nbytes,
++            state.capacity_bytes,
++        )
++    out = _nccl_gather_heads(x, group, world_size)
++    if use_sync:
++        torch.accelerator.synchronize(x.device)
++    return out
++
++
++@torch.library.custom_op(
++    "vllm_omni_flashinfer_ulysses::scatter_heads",
++    mutates_args=(),
++    device_types="cuda",
++)
++def flashinfer_ulysses_qkv_fwd(
++    x: torch.Tensor,
++    group_name: str,
++    world_size: int,
++    slot: str,
++    use_sync: bool,
++) -> torch.Tensor:
++    """Opaque compiled-graph node for PCIe Ulysses Q/K/V exchange."""
++    return _scatter_impl(x, group_name, world_size, slot, use_sync)
++
++
++@flashinfer_ulysses_qkv_fwd.register_fake
++def _(
++    x: torch.Tensor,
++    group_name: str,
++    world_size: int,
++    slot: str,
++    use_sync: bool,
++) -> torch.Tensor:
++    batch, local_seq, heads, head_dim = x.shape
++    return x.new_empty(batch, local_seq * world_size, heads // world_size, head_dim)
++
++
++@torch.library.custom_op(
++    "vllm_omni_flashinfer_ulysses::gather_heads",
++    mutates_args=(),
++    device_types="cuda",
++)
++def flashinfer_ulysses_o_rev(
++    x: torch.Tensor,
++    group_name: str,
++    world_size: int,
++    use_sync: bool,
++) -> torch.Tensor:
++    """Opaque compiled-graph node for inverse PCIe Ulysses output exchange."""
++    return _gather_impl(x, group_name, world_size, use_sync)
++
++
++@flashinfer_ulysses_o_rev.register_fake
++def _(
++    x: torch.Tensor,
++    group_name: str,
++    world_size: int,
++    use_sync: bool,
++) -> torch.Tensor:
++    batch, global_seq, local_heads, head_dim = x.shape
++    return x.new_empty(
++        batch,
++        global_seq // world_size,
++        local_heads * world_size,
++        head_dim,
++    )
++
++
++def clear_flashinfer_ulysses_communicators() -> None:
++    """Collectively close all process-local communicators before PG teardown."""
++    with _LOCK:
++        states = list(_STATES.items())
++    closed: list[tuple[tuple[str, torch.device], _PcieState]] = []
++    errors: list[Exception] = []
++    for key, state in states:
++        try:
++            state.close()
++            closed.append((key, state))
++        except Exception as exc:  # teardown errors must remain visible to shutdown logs
++            errors.append(exc)
++    with _LOCK:
++        for key, state in closed:
++            if _STATES.get(key) is state:
++                del _STATES[key]
++    if errors:
++        raise RuntimeError(f"failed to close {len(errors)} FlashInfer Ulysses communicator(s): {errors}")
+diff --git a/vllm_omni/diffusion/distributed/parallel_state.py b/vllm_omni/diffusion/distributed/parallel_state.py
+index 858a2e398c9e1c8f603e98c4f934d233a462c26b..a3445c00d8684b507d91a222d37c049347024f79 100644
+--- a/vllm_omni/diffusion/distributed/parallel_state.py
++++ b/vllm_omni/diffusion/distributed/parallel_state.py
+@@ -221,9 +221,9 @@ class RankGenerator:
+ 
+     def get_mask(self, order: str, token: str):
+         ordered_token = order.split("-")
+-        token = token.split("-")
++        tokens = token.split("-")
+         mask = [False] * len(ordered_token)
+-        for t in token:
++        for t in tokens:
+             mask[ordered_token.index(t)] = True
+         return mask
+ 
+@@ -856,12 +856,14 @@ def _initialize_model_parallel(
+     )
+     global _PP
+     assert _PP is None, "pipeline model parallel group is already initialized"
+-    _PP = init_model_parallel_group(
++    _pp_group = init_model_parallel_group(
+         group_ranks=get_rank_groups("pp"),
+         local_rank=get_world_group().local_rank,
+         backend=backend,
+         parallel_mode="pipeline",
+     )
++    assert isinstance(_pp_group, PipelineGroupCoordinator)
++    _PP = _pp_group
+     vllm_parallel_state._PP = _PP
+ 
+     global _SP
+@@ -874,7 +876,7 @@ def _initialize_model_parallel(
+         world_size=world_size,
+         sp_group_ranks=sp_group_ranks,
+     )
+-    _SP = init_model_parallel_group(
++    _sp_group = init_model_parallel_group(
+         group_ranks=sp_group_ranks,
+         local_rank=get_world_group().local_rank,
+         backend=backend,
+@@ -883,6 +885,8 @@ def _initialize_model_parallel(
+         ring_group=ring_pg,
+         allgather_group=allgather_pg,
+     )
++    assert isinstance(_sp_group, SequenceParallelGroupCoordinator)
++    _SP = _sp_group
+     if use_moe_parallel_mapping:
+         # Diffusion normally uses its own SP group. Map it to vLLM PCP only for
+         # expert-parallel runtimes that rely on vLLM FusedMoE group semantics.
+@@ -1021,6 +1025,11 @@ def destroy_model_parallel():
+     """Set the groups to none and destroy them."""
+     global _DP, _CFG, _SP, _PP, _FS, _HSDP_REPLICATE, _EXPERT_PARALLEL_GROUP_RANKS
+ 
++    # Registered windows must be collectively released while their PG is live.
++    from vllm_omni.diffusion.distributed.flashinfer_ulysses import clear_flashinfer_ulysses_communicators
++
++    clear_flashinfer_ulysses_communicators()
++
+     if vllm_parallel_state._DP and vllm_parallel_state._DP is not _DP:
+         vllm_parallel_state._DP.destroy()
+     vllm_parallel_state._DP = None

@@ -1,0 +1,14 @@
+{
+  "cutlass": {
+    "url": "https://github.com/NVIDIA/cutlass.git",
+    "revision": "b46b16d003484063bca4ed365e44095c4c6ed633"
+  },
+  "spdlog": {
+    "url": "https://github.com/gabime/spdlog.git",
+    "revision": "c3aed4b68373955e1cc94307683d44dca1515d2b"
+  },
+  "cccl": {
+    "url": "https://github.com/NVIDIA/cccl.git",
+    "revision": "16bd510c9b712e82b0ab6cbb630d8e29ba1f7116"
+  }
+}

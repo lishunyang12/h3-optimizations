@@ -1,0 +1,66 @@
+{
+  "date": "2026-09-23",
+  "format": "source-snapshot-without-original-git-history",
+  "vllm_omni": {
+    "upstream": "https://github.com/vllm-project/vllm-omni",
+    "base": "c7cd37b61e44fb51c61212ac9a317f2be26fe638",
+    "integration_head": "648906de857cecd73e276c9fe433adbea192be36",
+    "ports": {
+      "adaln": {
+        "upstream": "https://github.com/vllm-project/vllm-omni",
+        "base": "f8a00b1491ed5fa9e53698f3139b105b8e6657f9",
+        "head": "ac79ec009c5ac087ab60e936c6fa3a2e7c1a6c65",
+        "patch": "patches/adaln.patch"
+      },
+      "mxfp8": {
+        "upstream": "https://github.com/vllm-project/vllm-omni",
+        "base": "c7cd37b61e44fb51c61212ac9a317f2be26fe638",
+        "head": "0c248c848b5dfadef7066d54cfeae1d78c898757",
+        "patch": "patches/mxfp8.patch"
+      },
+      "sage": {
+        "upstream": "https://github.com/vllm-project/vllm-omni",
+        "base": "c7cd37b61e44fb51c61212ac9a317f2be26fe638",
+        "head": "ab8c20dfc8886f2d775114d42babdf55c08f4e1f",
+        "patch": "patches/sage.patch"
+      },
+      "vae": {
+        "upstream": "https://github.com/vllm-project/vllm-omni",
+        "base": "0c248c848b5dfadef7066d54cfeae1d78c898757",
+        "head": "17478165828fb5a991ed6cf3ec463a99a3b6d124",
+        "patch": "patches/vae.patch"
+      },
+      "rdma": {
+        "upstream": "https://github.com/vllm-project/vllm-omni",
+        "base": "c7cd37b61e44fb51c61212ac9a317f2be26fe638",
+        "head": "79b017eab2ee341c5da3557a415d3e76ec4e527e",
+        "patch": "patches/rdma.patch"
+      }
+    }
+  },
+  "flashinfer": {
+    "upstream": "https://github.com/lishunyang12/flashinfer",
+    "python_snapshot_head": "f841539c496788eb0221dec2736d0886d1c90ebd",
+    "effective_csrc_include_head": "ecd450bd9002e60081fa3c1eac0f16b05d06108c",
+    "identity": "Actual files include local modifications; use the SHA-256 manifest."
+  },
+  "fastvideo_kernel": {
+    "upstream": "https://github.com/hao-ai-lab/FastVideo",
+    "nearby_head": "3196835913ce9e97b23888b32643a1207cc5ee70"
+  },
+  "reference_runtime": {
+    "snapshot": "H3 Ref2VA short runtime",
+    "package_metadata": "0.28.0rc2.dev62+gad1bb0f97",
+    "exact_upstream_base": null,
+    "full_length_variant": "patches/ref2va-to-full-length-runtime.patch"
+  },
+  "exclusions": [
+    "model weights",
+    "private reference media",
+    "credentials",
+    "generated output media",
+    "profiler captures",
+    "JIT caches",
+    "original git history"
+  ]
+}

@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>MiniMax-H3 · Full-video A/B</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #080a0d;
+      --panel: rgba(17, 20, 25, .86);
+      --panel-strong: #12161b;
+      --line: rgba(255, 255, 255, .11);
+      --ink: #f5f6f2;
+      --muted: #929aa5;
+      --warm: #ffbf69;
+      --cyan: #6df2df;
+      --lime: #c9ff70;
+      --danger: #ff7a8a;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { min-height: 100%; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(1000px 620px at -8% -12%, rgba(49, 132, 147, .26), transparent 62%),
+        radial-gradient(900px 560px at 108% -4%, rgba(139, 77, 150, .22), transparent 62%),
+        var(--bg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button { font: inherit; }
+
+    .shell {
+      width: min(1780px, 100%);
+      margin: 0 auto;
+      padding: 24px clamp(14px, 2.5vw, 42px) 42px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--cyan);
+      font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .mark {
+      width: 12px;
+      height: 12px;
+      border-radius: 4px;
+      background: linear-gradient(135deg, var(--lime), var(--cyan));
+      box-shadow: 0 0 22px rgba(109, 242, 223, .55);
+      transform: rotate(12deg);
+    }
+
+    h1 {
+      margin: 12px 0 8px;
+      max-width: 900px;
+      font-size: clamp(31px, 4.2vw, 65px);
+      line-height: .98;
+      letter-spacing: -.055em;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(13px, 1.3vw, 16px);
+    }
+
+    .protocol {
+      flex: 0 0 auto;
+      padding: 10px 13px;
+      border: 1px solid rgba(109, 242, 223, .28);
+      border-radius: 999px;
+      color: var(--cyan);
+      background: rgba(13, 34, 36, .55);
+      font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) repeat(3, minmax(120px, 190px));
+      gap: 10px;
+      margin-bottom: 14px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(11, 13, 17, .68);
+      backdrop-filter: blur(18px);
+    }
+
+    .summary-copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-width: 0;
+      padding: 5px 9px;
+    }
+
+    .summary-copy strong {
+      font-size: 15px;
+      letter-spacing: -.015em;
+    }
+
+    .summary-copy span {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .stat {
+      padding: 11px 13px;
+      border: 1px solid rgba(255, 255, 255, .075);
+      border-radius: 13px;
+      background: rgba(255, 255, 255, .035);
+    }
+
+    .stat span, .metric span {
+      display: block;
+      color: var(--muted);
+      font: 700 9px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: 6px;
+      font: 750 20px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .stat strong.good { color: var(--lime); }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .control {
+      min-height: 38px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      color: var(--ink);
+      background: rgba(24, 28, 34, .88);
+      cursor: pointer;
+      transition: border-color .15s ease, transform .15s ease;
+    }
+
+    .control:hover { border-color: rgba(109, 242, 223, .55); }
+    .control:active { transform: translateY(1px); }
+    .control.primary { color: #07100e; border-color: transparent; background: var(--cyan); font-weight: 800; }
+    .control:disabled { cursor: wait; opacity: .45; }
+    .sync-note { margin-left: auto; color: var(--muted); font-size: 11px; }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--panel);
+      box-shadow: 0 28px 80px rgba(0, 0, 0, .28);
+      backdrop-filter: blur(18px);
+    }
+
+    .card.optimized { border-color: rgba(109, 242, 223, .25); }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 15px 17px;
+    }
+
+    .variant { min-width: 0; }
+
+    .variant-kicker {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--warm);
+      font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .optimized .variant-kicker { color: var(--cyan); }
+
+    .variant h2 {
+      margin: 0;
+      overflow: hidden;
+      font-size: clamp(15px, 1.6vw, 21px);
+      letter-spacing: -.025em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ready-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      flex: 0 0 auto;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .ready-pill::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .ready-pill.ready { color: var(--lime); border-color: rgba(201, 255, 112, .23); }
+
+    .video-shell {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      border-block: 1px solid rgba(255, 255, 255, .08);
+      background: #030405;
+    }
+
+    video {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+    }
+
+    .waiting {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      color: var(--muted);
+      background: linear-gradient(135deg, #0c1015, #080a0d);
+      text-align: center;
+      font: 650 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .waiting[hidden] { display: none; }
+
+    .details { padding: 15px 17px 18px; }
+
+    .implementation {
+      min-height: 35px;
+      margin: 0 0 14px;
+      color: #b7bdc5;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .metric {
+      min-width: 0;
+      padding: 11px;
+      border: 1px solid rgba(255, 255, 255, .075);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .032);
+    }
+
+    .metric strong {
+      display: block;
+      overflow: hidden;
+      margin-top: 6px;
+      font: 750 clamp(15px, 1.6vw, 20px)/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .metric strong.good { color: var(--lime); }
+    .metric strong.slow { color: var(--warm); }
+
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      margin-top: 15px;
+      color: #737b85;
+      font-size: 10px;
+      line-height: 1.5;
+    }
+
+    .error { color: var(--danger); }
+
+    @media (max-width: 980px) {
+      .summary { grid-template-columns: repeat(3, 1fr); }
+      .summary-copy { grid-column: 1 / -1; }
+      .comparison-grid { grid-template-columns: 1fr; }
+      .metric strong { font-size: 19px; }
+    }
+
+    @media (max-width: 620px) {
+      .shell { padding-top: 17px; }
+      header { flex-direction: column; gap: 13px; }
+      .summary { grid-template-columns: 1fr 1fr; }
+      .summary .stat:last-child { grid-column: 1 / -1; }
+      .controls { flex-wrap: wrap; }
+      .sync-note { width: 100%; margin: 2px 0 0; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .metric:last-child { grid-column: 1 / -1; }
+      footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <div class="eyebrow"><span class="mark"></span>MiniMax-H3 · measured artifact review</div>
+        <h1>Moon Teahouse Signal</h1>
+        <p class="subtitle">The same 15-second scene, shown as two original, complete video files.</p>
+      </div>
+      <div class="protocol">Full MP4 only · no frame extraction</div>
+    </header>
+
+    <section class="summary" aria-label="Comparison summary">
+      <div class="summary-copy">
+        <strong id="summaryTitle">Loading comparison artifacts…</strong>
+        <span id="summaryDetail">The page will become ready when both complete MP4 files are present.</span>
+      </div>
+      <div class="stat"><span>Speedup</span><strong id="speedup">—</strong></div>
+      <div class="stat"><span>Time saved</span><strong id="saved">—</strong></div>
+      <div class="stat"><span>Optimized RTF</span><strong id="optimizedRtf">—</strong></div>
+    </section>
+
+    <nav class="controls" aria-label="Synchronized video controls">
+      <button id="playBoth" class="control primary" type="button" disabled>Play both</button>
+      <button id="restartBoth" class="control" type="button" disabled>Restart</button>
+      <button id="audioBoth" class="control" type="button" disabled>Mute both</button>
+      <span class="sync-note">Playback controls keep both complete files aligned.</span>
+    </nav>
+
+    <section class="comparison-grid" aria-label="Full-video side-by-side comparison">
+      <article class="card standard">
+        <div class="card-head">
+          <div class="variant">
+            <span class="variant-kicker">Reference</span>
+            <h2 id="standardLabel">Standard stack</h2>
+          </div>
+          <span id="standardState" class="ready-pill">Checking</span>
+        </div>
+        <div class="video-shell">
+          <video id="standardVideo" controls playsinline preload="metadata" aria-label="Standard full MP4"></video>
+          <div id="standardWaiting" class="waiting">Waiting for the standard full MP4…</div>
+        </div>
+        <div class="details">
+          <p id="standardDetail" class="implementation">Loading implementation details…</p>
+          <div class="metrics">
+            <div class="metric"><span>HTTP E2E</span><strong id="standardE2e">—</strong></div>
+            <div class="metric"><span>RTF</span><strong id="standardRtf">—</strong></div>
+            <div class="metric"><span>MP4 bytes</span><strong id="standardSize">—</strong></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card optimized">
+        <div class="card-head">
+          <div class="variant">
+            <span class="variant-kicker">Candidate</span>
+            <h2 id="optimizedLabel">Optimized stack</h2>
+          </div>
+          <span id="optimizedState" class="ready-pill">Checking</span>
+        </div>
+        <div class="video-shell">
+          <video id="optimizedVideo" controls playsinline preload="metadata" aria-label="Optimized full MP4"></video>
+          <div id="optimizedWaiting" class="waiting">Waiting for the optimized full MP4…</div>
+        </div>
+        <div class="details">
+          <p id="optimizedDetail" class="implementation">Loading implementation details…</p>
+          <div class="metrics">
+            <div class="metric"><span>HTTP E2E</span><strong id="optimizedE2e">—</strong></div>
+            <div class="metric"><span>RTF</span><strong id="optimizedCardRtf">—</strong></div>
+            <div class="metric"><span>MP4 bytes</span><strong id="optimizedSize">—</strong></div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <footer>
+      <span>Source: browser-native playback of <code>/video/standard.mp4</code> and <code>/video/optimized.mp4</code>.</span>
+      <span>No screenshots, thumbnails, canvas copies, or extracted frames are produced by this page.</span>
+    </footer>
+  </main>
+
+  <script>
+    const byId = id => document.getElementById(id);
+    const standardVideo = byId('standardVideo');
+    const optimizedVideo = byId('optimizedVideo');
+    const videos = [standardVideo, optimizedVideo];
+    let comparison = null;
+    let synchronizing = false;
+    let retryTimer = null;
+
+    function formatSeconds(value) {
+      return Number.isFinite(value) && value > 0 ? `${value.toFixed(3)}s` : 'pending';
+    }
+
+    function formatBytes(value) {
+      if (!Number.isFinite(value) || value <= 0) return '—';
+      const units = ['B', 'KiB', 'MiB', 'GiB'];
+      let amount = value;
+      let unit = 0;
+      while (amount >= 1024 && unit < units.length - 1) {
+        amount /= 1024;
+        unit += 1;
+      }
+      return `${amount.toFixed(unit === 0 ? 0 : 2)} ${units[unit]}`;
+    }
+
+    function setReady(prefix, ready) {
+      const state = byId(`${prefix}State`);
+      const waiting = byId(`${prefix}Waiting`);
+      state.textContent = ready ? 'Full MP4 ready' : 'Preparing';
+      state.className = ready ? 'ready-pill ready' : 'ready-pill';
+      waiting.hidden = ready;
+    }
+
+    function installVideo(video, url) {
+      if (video.dataset.url === url) return;
+      video.src = url;
+      video.dataset.url = url;
+      video.load();
+    }
+
+    function renderVariant(prefix, value) {
+      byId(`${prefix}Label`).textContent = value.label;
+      byId(`${prefix}Detail`).textContent = value.detail;
+      byId(`${prefix}E2e`).textContent = formatSeconds(value.e2e_seconds);
+      const rtf = value.rtf;
+      const rtfNode = byId(prefix === 'optimized' ? 'optimizedCardRtf' : 'standardRtf');
+      rtfNode.textContent = Number.isFinite(rtf) ? rtf.toFixed(3) : 'pending';
+      rtfNode.className = Number.isFinite(rtf) ? (rtf < 1 ? 'good' : 'slow') : '';
+      byId(`${prefix}Size`).textContent = formatBytes(value.size_bytes);
+      installVideo(byId(`${prefix}Video`), value.url);
+      setReady(prefix, true);
+    }
+
+    function renderComparison(data) {
+      comparison = data;
+      byId('summaryTitle').classList.remove('error');
+      renderVariant('standard', data.standard);
+      renderVariant('optimized', data.optimized);
+
+      const standard = data.standard.e2e_seconds;
+      const optimized = data.optimized.e2e_seconds;
+      const measured = Number.isFinite(optimized) && optimized > 0;
+      byId('summaryTitle').textContent = measured
+        ? `The optimized stack returns ${data.media_seconds.toFixed(2)} seconds of media in ${optimized.toFixed(3)} seconds.`
+        : 'Both full MP4 artifacts are ready; optimized timing is awaiting publication.';
+      byId('summaryDetail').textContent = 'Same scene and media duration; each player receives its original MP4 file directly.';
+
+      const speedup = measured ? standard / optimized : null;
+      const saved = measured ? standard - optimized : null;
+      byId('speedup').textContent = speedup ? `${speedup.toFixed(2)}×` : 'pending';
+      byId('saved').textContent = saved !== null ? `${saved.toFixed(3)}s` : 'pending';
+      byId('optimizedRtf').textContent = Number.isFinite(data.optimized.rtf)
+        ? data.optimized.rtf.toFixed(3)
+        : 'pending';
+      byId('optimizedRtf').className = Number.isFinite(data.optimized.rtf) && data.optimized.rtf < 1 ? 'good' : '';
+      for (const id of ['playBoth', 'restartBoth', 'audioBoth']) byId(id).disabled = false;
+    }
+
+    async function loadComparison() {
+      clearTimeout(retryTimer);
+      try {
+        const healthResponse = await fetch('/health', {cache: 'no-store'});
+        if (!healthResponse.ok) throw new Error(`health returned HTTP ${healthResponse.status}`);
+        const health = await healthResponse.json();
+        setReady('standard', Boolean(health.standard_ready));
+        setReady('optimized', Boolean(health.optimized_ready));
+
+        if (health.standard_ready) installVideo(standardVideo, '/video/standard.mp4');
+        if (health.optimized_ready) installVideo(optimizedVideo, '/video/optimized.mp4');
+        if (!health.standard_ready || !health.optimized_ready) {
+          byId('summaryTitle').textContent = 'One or more complete MP4 artifacts are still being prepared.';
+          byId('summaryDetail').textContent = 'This page never substitutes screenshots or partial frame output; it waits for each full video.';
+          retryTimer = setTimeout(loadComparison, 2000);
+          return;
+        }
+
+        const response = await fetch('/api/comparison', {cache: 'no-store'});
+        if (!response.ok) throw new Error(`comparison returned HTTP ${response.status}`);
+        renderComparison(await response.json());
+      } catch (error) {
+        byId('summaryTitle').textContent = 'Comparison service unavailable';
+        byId('summaryTitle').className = 'error';
+        byId('summaryDetail').textContent = error instanceof Error ? error.message : String(error);
+        retryTimer = setTimeout(loadComparison, 3000);
+      }
+    }
+
+    async function playBoth() {
+      const playable = videos.filter(video => video.dataset.url);
+      if (!playable.length) return;
+      const target = Math.min(...playable.map(video => Number.isFinite(video.duration) ? video.currentTime : 0));
+      for (const video of playable) {
+        if (Math.abs(video.currentTime - target) > .08) video.currentTime = target;
+      }
+      await Promise.allSettled(playable.map(video => video.play()));
+      byId('playBoth').textContent = 'Pause both';
+    }
+
+    function pauseBoth() {
+      for (const video of videos) video.pause();
+      byId('playBoth').textContent = 'Play both';
+    }
+
+    byId('playBoth').addEventListener('click', () => {
+      if (videos.some(video => !video.paused)) pauseBoth();
+      else playBoth();
+    });
+
+    byId('restartBoth').addEventListener('click', async () => {
+      for (const video of videos) {
+        if (video.dataset.url) video.currentTime = 0;
+      }
+      await playBoth();
+    });
+
+    byId('audioBoth').addEventListener('click', () => {
+      const muted = !videos.every(video => video.muted);
+      for (const video of videos) video.muted = muted;
+      byId('audioBoth').textContent = muted ? 'Unmute both' : 'Mute both';
+    });
+
+    function alignPeers(source, eventName) {
+      if (synchronizing || !source.dataset.url) return;
+      synchronizing = true;
+      for (const peer of videos) {
+        if (peer === source || !peer.dataset.url) continue;
+        if (Math.abs(peer.currentTime - source.currentTime) > .12) peer.currentTime = source.currentTime;
+        if (eventName === 'play' && peer.paused) peer.play().catch(() => {});
+        if (eventName === 'pause' && !peer.paused) peer.pause();
+      }
+      synchronizing = false;
+      byId('playBoth').textContent = videos.some(video => !video.paused) ? 'Pause both' : 'Play both';
+    }
+
+    for (const video of videos) {
+      video.addEventListener('play', () => alignPeers(video, 'play'));
+      video.addEventListener('pause', () => alignPeers(video, 'pause'));
+      video.addEventListener('seeked', () => alignPeers(video, 'seeked'));
+      video.addEventListener('ended', () => {
+        if (videos.every(candidate => candidate.ended || !candidate.dataset.url)) {
+          byId('playBoth').textContent = 'Play both';
+        }
+      });
+    }
+
+    loadComparison();
+  </script>
+</body>
+</html>

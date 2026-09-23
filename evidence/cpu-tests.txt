@@ -1,0 +1,26 @@
+........................................................................ [  9%]
+..............................................s......................... [ 18%]
+.................................................s...................... [ 28%]
+........................................................................ [ 37%]
+........................................................................ [ 47%]
+........................................................................ [ 56%]
+........................................................................ [ 66%]
+........................................................................ [ 75%]
+........................................................................ [ 84%]
+........................................................................ [ 94%]
+...........................................                              [100%]
+=============================== warnings summary ===============================
+../../minimax-h3-native/vllm-omni-h3-dlo-latest/.venv-vllm028/lib/python3.12/site-packages/torch/jit/_script.py:365: 14 warnings
+  <test-env>/lib/python3.12/site-packages/torch/jit/_script.py:365: DeprecationWarning: `torch.jit.script_method` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+vllm_omni/version.py:55
+  <repo>/vllm-omni/vllm_omni/version.py:55: RuntimeWarning: vLLM and vLLM-Omni appear to have mismatched major/minor versions:
+   --> vLLM-Omni version 0.28.0rc2.dev62+gad1bb0f97
+   --> vLLM version 0.29.0
+  This will likely cause compatibility issues.
+    warn_if_misaligned_vllm_version()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+--- Running Summary
+761 passed, 2 skipped, 61 deselected, 15 warnings in 20.19s

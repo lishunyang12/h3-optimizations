@@ -1,0 +1,551 @@
+# Copyright (c) 2025 by FlashInfer team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""TraceTemplates for distributed communication ops."""
+
+import torch
+
+from ..template import Const, Scalar, Tensor, TraceTemplate, Var
+
+
+@torch.no_grad()
+def _allreduce_fusion_reference(
+    input: torch.Tensor,
+    workspace,
+    pattern: int,
+    launch_with_pdl: bool = False,
+    trigger_completion_at_end: bool = True,
+    output=None,
+    residual_out=None,
+    norm_out=None,
+    quant_out=None,
+    scale_out=None,
+    residual_in=None,
+    rms_gamma=None,
+    rms_eps: float = 1e-6,
+    weight_bias: float = 0.0,
+    **_unused,
+):
+    """Single-rank reference for allreduce_fusion.
+
+    AllReduce is a no-op in a single-process reference (the kernel under
+    test normally sums across ranks). This reference therefore treats
+    ``input`` as the already-reduced tensor and models the *fusion* side
+    of the op:
+
+    - pattern 0 (kAllReduce): passthrough input.
+    - pattern 1 (kARResidualRMSNorm): ``residual_out = input + residual_in``;
+      ``norm_out = rmsnorm(residual_out, weight_bias + rms_gamma, rms_eps)``.
+      ``weight_bias=0`` is standard RMSNorm; ``weight_bias=1`` is Gemma /
+      Qwen3.5 style (``(1 + gamma) * x * rsqrt(...)``).
+
+    Quantized / MoE patterns (>= 2) are outside the single-rank scope —
+    this reference raises ``NotImplementedError`` for them and callers
+    should exercise the real multi-rank kernel for coverage.
+    """
+    if pattern == 0:
+        out = input.clone()
+        if output is not None:
+            output.copy_(out)
+        return out
+    if pattern == 1:
+        if residual_in is None or rms_gamma is None:
+            raise ValueError(
+                "pattern=1 (kARResidualRMSNorm) requires residual_in and rms_gamma"
+            )
+        pre = input.to(torch.float32) + residual_in.to(torch.float32)
+        inv_rms = torch.rsqrt(pre.pow(2).mean(dim=-1, keepdim=True) + float(rms_eps))
+        normed = (pre * inv_rms) * (float(weight_bias) + rms_gamma.to(torch.float32))
+        pre_dtype = pre.to(input.dtype)
+        normed_dtype = normed.to(input.dtype)
+        if residual_out is not None:
+            residual_out.copy_(pre_dtype)
+        if norm_out is not None:
+            norm_out.copy_(normed_dtype)
+        return normed_dtype
+    raise NotImplementedError(
+        f"allreduce_fusion reference does not model pattern={pattern} "
+        "(quantized / MoE patterns are multi-rank-only)"
+    )
+
+
+def _allreduce_fusion_init(
+    *,
+    num_tokens: int,
+    hidden_dim: int = 4096,
+    pattern: int = 1,  # AR + Residual + RMSNorm
+    device: str = "cuda",
+    seed: int = 0,
+):
+    """Build per-rank inputs for ``allreduce_fusion``.
+
+    Note: ``workspace`` is an opaque multi-rank IPC handle and is **not**
+    initialized here — the caller must construct it (see
+    ``tests/comm/`` for end-to-end multi-rank examples). This init returns
+    everything else needed for the AR+Residual+RMSNorm fusion path
+    (pattern=1).
+    """
+    torch.manual_seed(seed)
+    inp = torch.randn(num_tokens, hidden_dim, dtype=torch.bfloat16, device=device)
+    residual = torch.randn_like(inp)
+    rms_gamma = torch.randn(hidden_dim, dtype=torch.bfloat16, device=device)
+    return {
+        "input": inp,
+        "residual_in": residual,
+        "rms_gamma": rms_gamma,
+        "rms_eps": 1e-6,
+        "pattern": int(pattern),
+    }
+
+
+allreduce_fusion_trace = TraceTemplate(
+    op_type="comm",
+    name_prefix="allreduce_fusion",
+    description=(
+        "TRT-LLM / MNNVL fused AllReduce + (Residual + RMSNorm + optional "
+        "FP8/FP4 Quantize). The reference models the fusion side of the op "
+        "under the assumption that the input has already been reduced "
+        "(AllReduce is a no-op single-rank); multi-rank correctness is "
+        "exercised by tests/comm/."
+    ),
+    axes={
+        "num_tokens": Var(description="Token count along dim 0."),
+        "hidden_dim": Const(abbrev="h"),
+    },
+    inputs={
+        "input": Tensor(
+            ["num_tokens", "hidden_dim"],
+            description="Pre-reduction token activations (this rank's shard).",
+        ),
+        "workspace": Scalar(
+            "int64",
+            description=(
+                "AllReduceFusionWorkspace handle (opaque to the trace; "
+                "its shape/content are backend-specific)."
+            ),
+        ),
+        "pattern": Scalar(
+            "int32",
+            description=(
+                "AllReduceFusionPattern enum: 0=AllReduce, "
+                "1=AR+Residual+RMSNorm, 2..5=with FP8/FP4 quant, "
+                "6=MoE reduction, 7=MoE finalize."
+            ),
+        ),
+        "residual_in": Tensor(
+            ["num_tokens", "hidden_dim"],
+            optional=True,
+            description="Residual to add (patterns 1..5).",
+        ),
+        "rms_gamma": Tensor(
+            ["hidden_dim"],
+            optional=True,
+            description="RMSNorm weight (patterns 1..5).",
+        ),
+        "rms_eps": Scalar("float32", optional=True),
+        "weight_bias": Scalar(
+            "float32",
+            optional=True,
+            description=(
+                "Bias added to rms_gamma before scaling. 0.0 (default) is "
+                "standard RMSNorm; 1.0 selects Gemma / Qwen3.5 RMSNorm "
+                "((1 + gamma) * x * rsqrt(...))."
+            ),
+        ),
+    },
+    outputs={
+        "output": Tensor(
+            ["num_tokens", "hidden_dim"],
+            dtype_from="input",
+            description="Main output; semantics depend on pattern.",
+        ),
+    },
+    tags=["status:verified", "stage:comm", "fused"],
+    reference=_allreduce_fusion_reference,
+    init=_allreduce_fusion_init,
+)
+
+
+# ── DCP all-to-all (context-parallel attention reduction) ────────────────────
+
+
+@torch.no_grad()
+def _decode_cp_a2a_alltoall_reference(
+    partial_o: torch.Tensor,
+    softmax_stats: torch.Tensor,
+    workspace,
+    cp_rank: int,
+    cp_size: int,
+    enable_pdl=None,
+    **_unused,
+):
+    """Single-rank reference for the DCP all-to-all.
+
+    The kernel is a multi-rank exchange: each rank sends its
+    ``partial_o[..., peer, :]`` slice to the corresponding peer and
+    receives the gathered contributions. In a single-process reference we
+    return ``partial_o`` and ``softmax_stats`` unchanged — the trace
+    captures the schema; multi-rank correctness is tested under
+    ``tests/comm/``.
+    """
+    return partial_o.clone(), softmax_stats.clone()
+
+
+def _decode_cp_a2a_alltoall_init(
+    *,
+    batch_dim: int,
+    cp_size: int,
+    head_dim: int = 128,
+    stats_dim: int = 2,
+    ws_elems_per_rank: int = 1,
+    cp_rank: int = 0,
+    device: str = "cuda",
+    seed: int = 0,
+):
+    """Build per-rank inputs for ``decode_cp_a2a_alltoall``.
+
+    Like ``allreduce_fusion``, the ``workspace`` is a multi-rank IPC
+    handle and not constructed here. ``cp_rank``/``cp_size`` default to
+    a single-rank dummy invocation.
+    """
+    torch.manual_seed(seed)
+    partial_o = torch.randn(
+        batch_dim, cp_size, head_dim, dtype=torch.bfloat16, device=device
+    )
+    softmax_stats = torch.randn(
+        batch_dim, cp_size, stats_dim, dtype=torch.float32, device=device
+    )
+    workspace = torch.zeros(
+        cp_size, ws_elems_per_rank, dtype=torch.int64, device=device
+    )
+    return {
+        "partial_o": partial_o,
+        "softmax_stats": softmax_stats,
+        "workspace": workspace,
+        "cp_rank": int(cp_rank),
+        "cp_size": int(cp_size),
+    }
+
+
+decode_cp_a2a_alltoall_trace = TraceTemplate(
+    op_type="comm",
+    name_prefix="decode_cp_a2a_alltoall",
+    description=(
+        "Context-parallel attention all-to-all reduction. Each rank ships "
+        "its ``partial_o[..., peer, :]`` slice to peer ``peer`` and "
+        "receives all peers' contributions in return. Used during paged "
+        "decode with context-parallelism. Single-rank reference is a "
+        "passthrough; multi-rank correctness is exercised by tests/comm."
+    ),
+    axes={
+        "batch_dim": Var(description="Leading batch dimension(s)."),
+        "cp_size": Var(description="Context-parallel group size."),
+        "head_dim": Const(abbrev="d"),
+        "stats_dim": Const(
+            description="Softmax stats trailing dim (>=2, even).", abbrev="s"
+        ),
+        "ws_elems_per_rank": Var(),
+    },
+    inputs={
+        "partial_o": Tensor(
+            ["batch_dim", "cp_size", "head_dim"],
+            description="Per-rank partial attention outputs [..., cp_size, D].",
+        ),
+        "softmax_stats": Tensor(
+            ["batch_dim", "cp_size", "stats_dim"],
+            description="Per-rank softmax stats [..., cp_size, S].",
+        ),
+        "workspace": Tensor(["cp_size", "ws_elems_per_rank"], dtype="int64"),
+        "cp_rank": Scalar("int32"),
+        "cp_size": Scalar("int32"),
+    },
+    outputs={
+        "partial_o_out": Tensor(
+            ["batch_dim", "cp_size", "head_dim"], dtype_from="partial_o"
+        ),
+        "softmax_stats_out": Tensor(
+            ["batch_dim", "cp_size", "stats_dim"], dtype_from="softmax_stats"
+        ),
+    },
+    tags=["status:verified", "stage:comm"],
+    reference=_decode_cp_a2a_alltoall_reference,
+    init=_decode_cp_a2a_alltoall_init,
+)
+
+
+# ── PCIe IPC all-reduce (intra-node, no NVLink) ──────────────────────────────
+
+
+@torch.no_grad()
+def _pcie_ipc_all_reduce_reference(
+    inp: torch.Tensor,
+    *,
+    out: torch.Tensor = None,
+    config=None,
+    enable_pdl: bool = False,
+) -> torch.Tensor:
+    """Single-rank reference: an all-reduce over one rank is the identity.
+
+    Same modelling choice as ``allreduce_fusion`` above -- the trace runs in a
+    single process, so the cross-rank reduction cannot be exercised here.
+    Multi-rank correctness is covered by
+    ``tests/comm/test_pcie_ipc_all_reduce.py``, which compares against NCCL at
+    zero tolerance.
+    """
+    return inp.clone() if out is None else out.copy_(inp)
+
+
+def _pcie_ipc_all_reduce_init(
+    *,
+    num_tokens: int,
+    hidden_dim: int = 6144,
+    device: str = "cuda",
+    seed: int = 0,
+):
+    """Build this rank's input for ``PcieIpcAllReduceWorkspace.all_reduce``.
+
+    The workspace itself is an opaque multi-rank IPC handle bound to ``self``
+    and is not built here; see ``tests/comm/test_pcie_ipc_all_reduce.py``.
+    """
+    generator = torch.Generator(device=device).manual_seed(seed)
+    return {
+        "inp": torch.randn(
+            num_tokens,
+            hidden_dim,
+            dtype=torch.bfloat16,
+            device=device,
+            generator=generator,
+        )
+    }
+
+
+pcie_ipc_all_reduce_trace = TraceTemplate(
+    op_type="comm",
+    name_prefix="pcie_ipc_all_reduce",
+    description=(
+        "Custom all-reduce for intra-node PCIe machines without NVLink. The "
+        "launch configuration follows the payload in bytes -- a seed default "
+        "until the workspace is tuned on the machine it runs on -- so the "
+        "traced axes are the ones that select it."
+    ),
+    axes={
+        "num_tokens": Var(description="Token count along dim 0."),
+        "hidden_dim": Const(abbrev="h"),
+    },
+    inputs={
+        "inp": Tensor(
+            ["num_tokens", "hidden_dim"],
+            description="Pre-reduction token activations (this rank's shard).",
+        ),
+    },
+    outputs={
+        "output": Tensor(
+            ["num_tokens", "hidden_dim"],
+            dtype_from="inp",
+            description="Reduced activations.",
+        ),
+    },
+    tags=["status:verified", "stage:comm"],
+    reference=_pcie_ipc_all_reduce_reference,
+    init=_pcie_ipc_all_reduce_init,
+)
+# ── Ulysses 4-D layout transforms ─────────────────────────────────────────────────
+
+
+@torch.no_grad()
+def _ulysses_single_rank_reference(
+    x: torch.Tensor, out: torch.Tensor = None, **_unused
+) -> torch.Tensor:
+    """Single-rank reference; multi-rank permutation is tested under tests/comm."""
+    result = x.clone()
+    if out is not None:
+        out.copy_(result)
+        return out
+    return result
+
+
+class _UlyssesSingleRankTraceTemplate(TraceTemplate):
+    """Route trace-apply by the communicator's real process-group size.
+
+    ``world_size`` has no ordinary source: it is neither a tensor dimension nor
+    a scalar argument, but a property of the bound communicator that the
+    collectives are *methods* on. The standard ``param=`` / ``Scalar`` routes
+    cannot reach it, so the axis extractor reads it off the receiver instead.
+    """
+
+    def _build_axis_extractors(self):
+        extractors = super()._build_axis_extractors()
+
+        def extract_world_size(kwargs):
+            communicator = kwargs.get("self")
+            world_size = getattr(communicator, "world_size", None)
+            return None if world_size is None else int(world_size)
+
+        extractors["world_size"] = extract_world_size
+        return extractors
+
+
+_ulysses_scatter_heads_template = _UlyssesSingleRankTraceTemplate(
+    op_type="comm",
+    name_prefix="ulysses_scatter_heads",
+    description=(
+        "Ulysses context-parallel scatter-heads transform from per-rank sequence "
+        "shards to per-rank head shards. The reference models world_size=1; "
+        "multi-rank correctness is exercised by tests/comm/."
+    ),
+    axes={
+        "batch_size": Var(),
+        "local_seq_len": Var(
+            description="Sequence tokens owned by this rank before scatter."
+        ),
+        "global_num_heads": Var(description="Head count before rank sharding."),
+        "world_size": Const(
+            value=1,
+            abbrev="ws",
+            description="fi_trace models the single-rank identity case only.",
+        ),
+        "head_dim": Const(abbrev="d"),
+    },
+    inputs={
+        "x": Tensor(["batch_size", "local_seq_len", "global_num_heads", "head_dim"]),
+    },
+    outputs={
+        "output": Tensor(
+            ["batch_size", "local_seq_len", "global_num_heads", "head_dim"],
+            dtype_from="x",
+            param="out",
+        )
+    },
+    constraints=["world_size == 1"],
+    tags=["status:experimental", "stage:comm"],
+    reference=_ulysses_single_rank_reference,
+)
+
+
+_ulysses_gather_heads_template = _UlyssesSingleRankTraceTemplate(
+    op_type="comm",
+    name_prefix="ulysses_gather_heads",
+    description=(
+        "Inverse Ulysses context-parallel transform from per-rank head shards "
+        "to per-rank sequence shards. The reference models world_size=1; "
+        "multi-rank correctness is exercised by tests/comm/."
+    ),
+    axes={
+        "batch_size": Var(),
+        "global_seq_len": Var(
+            description="Full sequence length before the inverse transform."
+        ),
+        "local_num_heads": Var(description="Head slice owned by this rank."),
+        "world_size": Const(
+            value=1,
+            abbrev="ws",
+            description="fi_trace models the single-rank identity case only.",
+        ),
+        "head_dim": Const(abbrev="d"),
+    },
+    inputs={
+        "x": Tensor(["batch_size", "global_seq_len", "local_num_heads", "head_dim"]),
+    },
+    outputs={
+        "output": Tensor(
+            ["batch_size", "global_seq_len", "local_num_heads", "head_dim"],
+            dtype_from="x",
+            param="out",
+        )
+    },
+    constraints=["world_size == 1"],
+    tags=["status:experimental", "stage:comm"],
+    reference=_ulysses_single_rank_reference,
+)
+
+
+_ulysses_exchange_chunks_template = _UlyssesSingleRankTraceTemplate(
+    op_type="comm",
+    name_prefix="ulysses_exchange_chunks",
+    description=(
+        "Equal-length chunk all-to-all over an already-packed payload: chunk "
+        "``r`` goes to peer ``r`` and lands in slot ``rank`` there. Unlike the "
+        "two head-axis transforms this one interleaves nothing, so it is the "
+        "identity at world_size=1 by shape as well as by value. The reference "
+        "models world_size=1; multi-rank correctness is exercised by "
+        "tests/comm/."
+    ),
+    # Every axis the operand carries is read off its shape; only world_size
+    # comes off the communicator, so it is the one with a fixed value here.
+    axes={
+        "batch_size": Const(
+            abbrev="",
+            description="Pinned to 1: one row per operand is what lets the "
+            "transport address each peer's bytes contiguously.",
+        ),
+        "seq_len": Const(abbrev="", description="Pinned to 1, as above."),
+        "chunk_count": Const(
+            abbrev="",
+            description="Chunks in the operand, one per peer, so equal to "
+            "world_size by construction.",
+        ),
+        "world_size": Const(
+            value=1,
+            abbrev="ws",
+            description="fi_trace models the single-rank identity case only.",
+        ),
+        "chunk": Const(abbrev="c", description="Elements in one peer's chunk."),
+    },
+    inputs={
+        "x": Tensor(["batch_size", "seq_len", "chunk_count", "chunk"]),
+    },
+    outputs={
+        "output": Tensor(
+            ["batch_size", "seq_len", "chunk_count", "chunk"],
+            dtype_from="x",
+            param="out",
+        )
+    },
+    constraints=["world_size == 1", "chunk_count == world_size"],
+    tags=["status:experimental", "stage:comm"],
+    reference=_ulysses_single_rank_reference,
+)
+
+
+def _ulysses_single_rank_trace_dispatch(template, **kwargs):
+    """Trace only the identity case; multi-rank collectives have no local reference."""
+    communicator = kwargs.get("self")
+    return template if getattr(communicator, "world_size", None) == 1 else None
+
+
+def ulysses_scatter_heads_trace(**kwargs):
+    return _ulysses_single_rank_trace_dispatch(
+        _ulysses_scatter_heads_template, **kwargs
+    )
+
+
+def ulysses_gather_heads_trace(**kwargs):
+    return _ulysses_single_rank_trace_dispatch(_ulysses_gather_heads_template, **kwargs)
+
+
+def ulysses_exchange_chunks_trace(**kwargs):
+    return _ulysses_single_rank_trace_dispatch(
+        _ulysses_exchange_chunks_template, **kwargs
+    )
+
+
+ulysses_scatter_heads_trace.templates = (  # type: ignore[attr-defined]
+    _ulysses_scatter_heads_template,
+)
+ulysses_gather_heads_trace.templates = (  # type: ignore[attr-defined]
+    _ulysses_gather_heads_template,
+)
+ulysses_exchange_chunks_trace.templates = (  # type: ignore[attr-defined]
+    _ulysses_exchange_chunks_template,
+)

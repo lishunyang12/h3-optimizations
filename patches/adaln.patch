@@ -1,0 +1,1694 @@
+diff --git a/recipes/MiniMaxAI/MiniMax-H3.md b/recipes/MiniMaxAI/MiniMax-H3.md
+index 9eac85ecea4f184a1170c895c274549b8761bb0c..89865967f9292e4aeac6ab7e6b486226b91e940f 100644
+--- a/recipes/MiniMaxAI/MiniMax-H3.md
++++ b/recipes/MiniMaxAI/MiniMax-H3.md
+@@ -1017,6 +1017,74 @@ balanced switch order.
+ > workload. The values above apply to this deployment and are not universal
+ > guarantees. `lossless` remains the exact reference path.
+ 
++## Exact AdaLN reuse
++
++H3 enables exact AdaLN projection reuse by default, independently of the task,
++hardware, sampling schedule, quantization setting, and request `quality`.
++This applies to both original H3 (including its default 50-point schedule) and
++FastH3; no distilled adapter or explicit few-step ladder is required.
++The first occurrence of an input runs the existing projection; later identical
++time embeddings reuse its output only while the projection weights and numerical
++settings remain unchanged. This does not approximate neighboring timesteps or
++change attention, precision, sampling, or the generated audio/video contract.
++
++Each DiT keeps at most 256 MiB of runtime projection outputs. If a long schedule
++exceeds that budget, it retains a reusable subset and computes other entries
++normally, avoiding cyclic eviction on repeated original-H3 requests. All original weights
++remain loaded so new schedules and adapters can compute normally. Adapter changes,
++weight reloads, and model device moves invalidate the cache; parameter versions
++also guard individual entries. TP ranks coordinate hits before skipping a
++projection collective. Gradient-enabled execution, compilation, custom linear
++hooks, and tensors without weight version counters use the original computation.
++Offload paths that replace weight storage can therefore reduce the hit rate.
++
++For an A/B comparison, disable only this reuse at server startup:
++
++```bash
++--cache-config '{"minimax_h3_adaln_cache": false}'
++```
++
++### Optional offline sidecar
++
++An offline sidecar can seed the first projection results; it is not required to
++enable the default cache. The current builder targets native BF16 TP1 math with
++the same numerical environment as serving. Other serving configurations continue
++using the default runtime cache. From the repository root, for a fixed FastH3
++adapter and its own four-step schedule:
++
++```bash
++PYTHONPATH=. python tools/minimax_h3/build_adaln_cache.py \
++  --transformer-path "${MODEL_ROOT}/FL2VA/transformer" \
++  --model-variant fl2va --mode t2va \
++  --fasth3-adapter "${FASTH3_ADAPTER}" \
++  --num-inference-steps 4 --flow-shift 12 --audio-flow-shift 3 \
++  --device cuda --output /path/to/h3-adaln.safetensors
++```
++
++Omit `--fasth3-adapter` for base weights and use the serving step count and shifts.
++The builder accepts a native transformer directory with `config.json` and indexed
++or single-file safetensors. It streams the required inputs and refuses to overwrite
++an existing output. It does not instantiate the full DiT.
++
++Pass the resulting local artifact at startup:
++
++```bash
++--cache-config '{"minimax_h3_adaln_cache_path": "/path/to/h3-adaln.safetensors"}'
++```
++
++Combined servers can also use `minimax_h3_ref_adaln_cache_path` for their Ref2VA
++transformer. Each artifact binds the model architecture, task, schedule, shifts,
++fixed adapter file, effective time-embedding/AdaLN weights, payload checksums, and
++numerical environment. A missing, corrupt, incompatible, or outdated sidecar is
++rejected with a warning; the model still loads every weight and computes through
++the runtime path. A request with different settings similarly falls back.
++Build sidecars from trusted local inputs: checksums verify identity and integrity,
++not the correctness of an untrusted generator.
++
++This implementation saves repeated projection work. It does not remove AdaLN
++weights or claim a GPU memory reduction. End-to-end gains depend on the workload,
++offload behavior, embedding fingerprint cost, and TP coordination overhead.
++
+ ## LoRA
+ 
+ ### Turbo LoRA
+diff --git a/tests/diffusion/models/minimax_h3/test_adaln_cache.py b/tests/diffusion/models/minimax_h3/test_adaln_cache.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..38c4bd32ea82e6461aa03e11f88e06ac6eb9e551
+--- /dev/null
++++ b/tests/diffusion/models/minimax_h3/test_adaln_cache.py
+@@ -0,0 +1,481 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
++
++from __future__ import annotations
++
++import copy
++from dataclasses import asdict
++from types import SimpleNamespace
++
++import pytest
++import torch
++from safetensors.torch import save_file
++
++from vllm_omni.diffusion.models.minimax_h3 import minimax_h3_transformer as h3
++from vllm_omni.diffusion.models.minimax_h3.adaln_cache import (
++    FORMAT_VERSION,
++    MODES,
++    MiniMaxH3AdalnCache,
++    MiniMaxH3RuntimeAdalnCache,
++    build_cache,
++    canonical_json,
++    input_names,
++    schedule_contract,
++    tensor_digest,
++    timestep_plans,
++)
++from vllm_omni.diffusion.models.minimax_h3.pipeline_minimax_h3 import MiniMaxH3Pipeline
++
++pytestmark = [pytest.mark.core_model, pytest.mark.diffusion, pytest.mark.cpu]
++
++
++@pytest.fixture(autouse=True)
++def tp1(monkeypatch):
++    import vllm.distributed
++
++    monkeypatch.setattr(vllm.distributed, "get_tensor_model_parallel_world_size", lambda: 1)
++
++
++def _contract(mode="t2va", **updates):
++    values = dict(
++        mode=mode, num_steps=4, base_schedule=(0.999, 0.749, 0.5, 0.25, 0.0), flow_shift=12.0, audio_flow_shift=3.0
++    )
++    return schedule_contract(**(values | updates))
++
++
++def _fixture(tmp_path, mode="t2va", adapter=None, *, base_model=False):
++    arch = h3.MiniMaxH3DiTArchConfig(
++        num_layers=2, hidden_size=8, timestep_input_dim=4, time_embed_hidden_size=8, time_embed_dim=4
++    )
++    generator = torch.Generator().manual_seed(4)
++    weights = {}
++    for name, shape in {
++        "time_embedder.proj_in.weight": (8, 4),
++        "time_embedder.proj_in.bias": (8,),
++        "time_embedder.proj_out.weight": (4, 8),
++        "time_embedder.proj_out.bias": (4,),
++    }.items():
++        weights[name] = torch.randn(shape, generator=generator)
++    for name in sorted(input_names(arch.num_layers)):
++        if name.startswith("time_embedder."):
++            continue
++        width = (2 if name.startswith("final_layer.") else 18) * arch.hidden_size
++        shape = (width, arch.time_embed_dim) if name.endswith("weight") else (width,)
++        weights[name] = torch.randn(shape, generator=generator).to(torch.bfloat16)
++    variant = "ref2va" if mode.startswith("ref2va") else "fl2va"
++    payload, manifest = build_cache(
++        arch,
++        weights.items(),
++        contract=_contract(mode, **({"num_steps": 50, "base_schedule": None} if base_model else {})),
++        model_variant=variant,
++        adapter_sha256=adapter,
++        device=torch.device("cpu"),
++    )
++    path = tmp_path / "adaln.safetensors"
++    _save(path, payload, manifest)
++    return arch, weights, payload, manifest, path
++
++
++def _save(path, payload, manifest):
++    save_file(payload, str(path), metadata={"format_version": FORMAT_VERSION, "manifest": canonical_json(manifest)})
++
++
++def _ready(arch, weights, path, variant="fl2va", adapter=None):
++    cache = MiniMaxH3AdalnCache(arch, path=str(path), model_variant=variant)
++    cache.bind_adapter(adapter)
++    for name, weight in weights.items():
++        cache.verify_weight(name, weight)
++    cache.finish_loading(torch.device("cpu"))
++    return cache
++
++
++@pytest.mark.parametrize("mode", MODES)
++@pytest.mark.parametrize("base_model", [False, True], ids=["explicit-ladder", "base-h3-50"])
++def test_builder_projection_parity_all_tasks(tmp_path, mode, base_model):
++    arch, weights, payload, manifest, path = _fixture(tmp_path, mode, base_model=base_model)
++    cache = _ready(arch, weights, path, manifest["model_variant"])
++    for i, plan in enumerate(timestep_plans(manifest["schedule"])):
++        blocks, final = cache.lookup(plan)
++        embedding = payload["time_embeddings"][i, : len(plan)]
++        activated = torch.nn.functional.silu(embedding).to(torch.bfloat16)
++        for block_index, pieces in enumerate(blocks):
++            prefix = f"blocks.{block_index}.adaln_proj.linear"
++            expected = torch.nn.functional.linear(activated, weights[prefix + ".weight"], weights[prefix + ".bias"])
++            actual = torch.stack(pieces, dim=1).reshape(len(plan), -1)
++            assert torch.equal(actual, expected)
++        prefix = "final_layer.adaln_proj.linear"
++        expected = torch.nn.functional.linear(activated, weights[prefix + ".weight"], weights[prefix + ".bias"])
++        assert torch.equal(torch.stack(final, dim=1).reshape(len(plan), -1), expected)
++    assert not cache.state_dict()
++
++
++def test_runtime_reuses_exact_outputs_and_tracks_changed_weights(mocker):
++    cache = MiniMaxH3RuntimeAdalnCache()
++    linear = torch.nn.Linear(4, 8)
++    x = torch.randn(2, 4)
++    compute = mocker.Mock(side_effect=lambda: linear(x))
++    with torch.no_grad():
++        cache.prepare(x)
++        first = cache.project("block", linear, x, compute)
++        first_copy = first.clone()
++        first.zero_()  # The caller/provider cannot corrupt the owned cache.
++        assert torch.equal(cache.project("block", linear, x, compute), first_copy)
++        assert compute.call_count == 1
++        linear.weight.add_(0.25)
++        assert torch.equal(cache.project("block", linear, x, compute), linear(x))
++        assert compute.call_count == 2
++        other = x.clone()
++        other[0, 0] += 1
++        cache.prepare(other)
++        cache.project("block", linear, other, lambda: linear(other))
++        cache.prepare(x)
++        cache.project("block", linear, x, compute)
++        assert compute.call_count == 2
++    assert cache.hits == 2
++
++
++def test_runtime_budget_retains_reusable_entries_without_schedule_thrashing(mocker):
++    cache = MiniMaxH3RuntimeAdalnCache(max_bytes=32)
++    linear = torch.nn.Linear(2, 4)
++    x = torch.ones(2, 2)
++    compute = mocker.Mock(side_effect=lambda: linear(x))
++    with torch.no_grad():
++        cache.prepare(x)
++        for name in ("first", "second", "first"):
++            cache.project(name, linear, x, compute)
++            assert cache._bytes <= 32
++        assert compute.call_count == 2
++        assert cache.hits == 1
++        cache.clear()
++        assert cache._bytes == 0 and not cache._entries
++
++
++def test_dynamic_lora_buffers_and_suspend_mask_invalidate_entries(mocker):
++    cache = MiniMaxH3RuntimeAdalnCache()
++    linear = torch.nn.Linear(2, 2)
++    linear.lora_a_stacked = (torch.ones(1, 2),)
++    linear.lora_b_stacked = (torch.ones(2, 1),)
++    linear._diffusion_lora_active_slices = (True,)
++    x = torch.ones(1, 2)
++
++    def compute():
++        result = linear(x)
++        if linear._diffusion_lora_active_slices[0]:
++            result = result + x @ linear.lora_a_stacked[0].T @ linear.lora_b_stacked[0].T
++        return result
++
++    counted = mocker.Mock(side_effect=compute)
++    with torch.no_grad():
++        cache.prepare(x)
++        cache.project("a", linear, x, counted)
++        cache.project("a", linear, x, counted)
++        assert counted.call_count == 1
++        linear.lora_b_stacked[0].add_(1)
++        assert torch.equal(cache.project("a", linear, x, counted), compute())
++        linear._diffusion_lora_active_slices = (False,)
++        assert torch.equal(cache.project("a", linear, x, counted), compute())
++        assert counted.call_count == 3
++
++
++def test_linear_hooks_run_even_after_cache_warmup():
++    cache = MiniMaxH3RuntimeAdalnCache()
++    linear = torch.nn.Linear(2, 2)
++    x = torch.ones(1, 2)
++    with torch.no_grad():
++        cache.prepare(x)
++        cache.project("a", linear, x, lambda: linear(x))
++
++        # A hook is allowed to change the projection on each invocation.
++        def change_weight(module, args):
++            module.weight.add_(1)
++
++        hook = linear.register_forward_pre_hook(change_weight)
++        try:
++            previous = linear.weight.clone()
++            cache.project("a", linear, x, lambda: linear(x))
++            assert torch.equal(linear.weight, previous + 1)
++            cache.project("a", linear, x, lambda: linear(x))
++            assert torch.equal(linear.weight, previous + 2)
++        finally:
++            hook.remove()
++
++
++def test_disabled_and_grad_paths_keep_original_computation(monkeypatch, mocker):
++    import vllm_omni.diffusion.models.minimax_h3.adaln_cache as module
++
++    monkeypatch.setattr(module, "tensor_digest", mocker.Mock(side_effect=AssertionError("must not hash")))
++    linear = torch.nn.Linear(2, 2)
++    x = torch.ones(1, 2, requires_grad=True)
++    for cache in (MiniMaxH3RuntimeAdalnCache(max_bytes=0), MiniMaxH3RuntimeAdalnCache()):
++        cache.prepare(x)
++        cache.project("a", linear, x, lambda: linear(x)).sum().backward()
++        assert x.grad is not None
++    with torch.no_grad():
++        cache = MiniMaxH3RuntimeAdalnCache(max_bytes=0)
++        cache.prepare(x)
++        assert torch.equal(cache.project("a", linear, x, lambda: linear(x)), linear(x))
++
++
++def test_tp_rank_miss_forces_every_rank_to_recompute(monkeypatch, mocker):
++    import vllm.distributed
++
++    cache = MiniMaxH3RuntimeAdalnCache()
++    linear = torch.nn.Linear(2, 2)
++    x = torch.ones(1, 2)
++    compute = mocker.Mock(side_effect=lambda: linear(x))
++    with torch.no_grad():
++        cache.prepare(x)
++        cache.project("a", linear, x, compute)
++        votes = mocker.Mock(side_effect=[torch.tensor([1]), torch.tensor([2])])
++        monkeypatch.setattr(vllm.distributed, "get_tensor_model_parallel_world_size", lambda: 2)
++        monkeypatch.setattr(vllm.distributed, "get_tp_group", lambda: SimpleNamespace(all_reduce=votes))
++        cache.project("a", linear, x, compute)
++        assert compute.call_count == 2
++        cache.project("a", linear, x, compute)
++        assert compute.call_count == 2
++        assert votes.call_count == 2
++
++
++@pytest.mark.parametrize("change", ["variant", "architecture", "weights", "payload", "plans", "nan", "version"])
++def test_reject_invalid_sidecar(tmp_path, change):
++    arch, weights, payload, manifest, path = _fixture(tmp_path)
++    payload = {key: value.clone() for key, value in payload.items()}
++    manifest = copy.deepcopy(manifest)
++    if change == "variant":
++        manifest["model_variant"] = "ref2va"
++    elif change == "architecture":
++        manifest["architecture"]["hidden_size"] += 1
++    elif change == "weights":
++        manifest["weights"].pop(next(iter(weights)))
++    elif change == "payload":
++        payload["block_params"][0, 0, 0, 0] += 1
++    elif change == "plans":
++        payload["plan_timesteps"][0, 0] += 0.01
++        manifest["payload"]["plan_timesteps"] = tensor_digest(payload["plan_timesteps"])
++    elif change == "nan":
++        payload["final_params"][0, 0, 0] = float("nan")
++        manifest["payload"]["final_params"] = tensor_digest(payload["final_params"])
++    _save(path, payload, manifest)
++    if change == "version":
++        save_file(payload, str(path), metadata={"format_version": "3"})
++    with pytest.raises(ValueError):
++        MiniMaxH3AdalnCache(arch, path=str(path), model_variant="fl2va")
++
++
++def test_weight_adapter_schedule_and_uncovered_timestep_checks(tmp_path):
++    arch, weights, _, manifest, path = _fixture(tmp_path, adapter="a" * 64)
++    cache = MiniMaxH3AdalnCache(arch, path=str(path), model_variant="fl2va")
++    with pytest.raises(ValueError, match="adapter mismatch"):
++        cache.bind_adapter(None)
++    cache.bind_adapter("a" * 64)
++    with pytest.raises(ValueError, match="Missing"):
++        cache.finish_loading(torch.device("cpu"))
++    name = next(iter(weights))
++    with pytest.raises(ValueError, match="effective weight mismatch"):
++        cache.verify_weight(name, weights[name] + 1)
++    for name, weight in weights.items():
++        cache.verify_weight(name, weight)
++    cache.finish_loading(torch.device("cpu"))
++    for update in (
++        {"flow_shift": 10.0},
++        {"audio_flow_shift": 4.0},
++        {"mode": "fl2va"},
++        {"base_schedule": [0.99, 0.74, 0.5, 0.25, 0]},
++    ):
++        with pytest.raises(ValueError):
++            cache.check_request(**(manifest["schedule"] | update))
++    with pytest.raises(ValueError, match="does not cover"):
++        cache.lookup(torch.tensor([0.123]))
++
++
++def test_adapter_switch_invalidates_runtime_cache(mocker):
++    pipeline = object.__new__(MiniMaxH3Pipeline)
++    torch.nn.Module.__init__(pipeline)
++    cache = mocker.Mock()
++    pipeline.transformer = SimpleNamespace(adaln_cache=cache)
++    from vllm.lora.request import LoRARequest
++
++    from vllm_omni.inputs.data import OmniDiffusionSamplingParams
++
++    sampling = OmniDiffusionSamplingParams(lora_request=LoRARequest("one", 1, "one"), lora_scale=1.0)
++    pipeline._prepare_adaln_adapter(sampling)
++    pipeline._prepare_adaln_adapter(sampling)
++    assert cache.clear.call_count == 1
++    sampling.lora_scale = 0.5
++    pipeline._prepare_adaln_adapter(sampling)
++    sampling.lora_request = None
++    pipeline._prepare_adaln_adapter(sampling)
++    assert cache.clear.call_count == 3
++
++
++def test_bad_sidecar_never_drops_runtime_weights(tmp_path):
++    arch, weights, _, _, path = _fixture(tmp_path)
++    candidate = MiniMaxH3AdalnCache(arch, path=str(path), model_variant="fl2va")
++    component = SimpleNamespace(_adaln_sidecar_candidate=candidate)
++    changed = list(weights.items())
++    changed[0] = changed[0][0], changed[0][1] + 1
++    result = list(MiniMaxH3Pipeline._verify_adaln_weights(component, iter(changed)))
++    assert len(result) == len(changed)
++    assert all(tensor is source for (_, tensor), (_, source) in zip(result, changed))
++    assert component._adaln_sidecar_candidate is None
++
++
++@pytest.mark.parametrize("tp_size", [1, 2])
++def test_native_constructor_enables_cache_by_default(monkeypatch, tp_size):
++    from tests.diffusion.models.minimax_h3.test_minimax_h3_quantization import (
++        _FakeAttention,
++        _FakeLinear,
++        _small_od_config,
++    )
++
++    for name in ("ColumnParallelLinear", "RowParallelLinear", "MergedColumnParallelLinear", "QKVParallelLinear"):
++        monkeypatch.setattr(h3, name, _FakeLinear)
++    monkeypatch.setattr(h3, "Attention", _FakeAttention)
++    monkeypatch.setattr(h3, "get_tensor_model_parallel_world_size", lambda: tp_size)
++    config = _small_od_config()
++    model = h3.MiniMaxH3DiTModel(config, diffusers_weights=False)
++    assert model.adaln_cache.max_bytes > 0
++    assert model.blocks[0].adaln_proj._adaln_cache is model.adaln_cache
++    assert model.final_layer.adaln_proj._adaln_cache is model.adaln_cache
++    assert "blocks.0.adaln_proj.linear.weight" in dict(model.named_parameters())
++    config.cache_config = {"minimax_h3_adaln_cache": False}
++    disabled = h3.MiniMaxH3DiTModel(config, diffusers_weights=False)
++    assert disabled.adaln_cache.max_bytes == 0
++
++
++def test_optional_sidecar_seeds_runtime_projection(tmp_path, mocker):
++    arch, weights, payload, _, path = _fixture(tmp_path)
++    sidecar = _ready(arch, weights, path)
++    runtime = MiniMaxH3RuntimeAdalnCache()
++    name = "blocks.0.adaln_proj.linear"
++    linear = torch.nn.Linear(arch.time_embed_dim, 18 * arch.hidden_size, dtype=torch.bfloat16)
++    with torch.no_grad():
++        linear.weight.copy_(weights[name + ".weight"])
++        linear.bias.copy_(weights[name + ".bias"])
++        runtime.seed(sidecar, {name: linear})
++        x = payload["time_embeddings"][1, :2].clone()
++        runtime.prepare(x)
++        compute = mocker.Mock(side_effect=lambda: linear(torch.nn.functional.silu(x).to(torch.bfloat16)))
++        result = runtime.project(name, linear, x, compute)
++        assert compute.call_count == 0
++        assert torch.equal(result, compute())
++        linear.weight.add_(1)
++        runtime.project(name, linear, x, compute)
++        assert compute.call_count == 2
++
++
++def test_builder_rejects_missing_or_duplicate_weights(tmp_path):
++    arch, weights, _, manifest, _ = _fixture(tmp_path)
++    for source in (list(weights.items())[:-1], [*weights.items(), next(iter(weights.items()))]):
++        with pytest.raises(ValueError):
++            build_cache(
++                arch,
++                source,
++                contract=manifest["schedule"],
++                model_variant="fl2va",
++                adapter_sha256=None,
++                device=torch.device("cpu"),
++            )
++
++
++def test_native_checkpoint_builder_cli(tmp_path, monkeypatch):
++    from tools.minimax_h3.build_adaln_cache import main
++
++    arch, weights, _, _, _ = _fixture(tmp_path)
++    root = tmp_path / "transformer"
++    root.mkdir()
++    (root / "config.json").write_text(canonical_json(asdict(arch)))
++    save_file(weights, str(root / "model.safetensors"))
++    output = tmp_path / "cli.safetensors"
++    argv = [
++        "build_adaln_cache",
++        "--transformer-path",
++        str(root),
++        "--output",
++        str(output),
++        "--model-variant",
++        "fl2va",
++        "--num-inference-steps",
++        "4",
++        "--device",
++        "cpu",
++    ]
++    monkeypatch.setattr("sys.argv", argv)
++    main()
++    _ready(arch, weights, output)
++    with pytest.raises(ValueError, match="overwrite"):
++        main()
++
++
++@pytest.mark.parametrize("base_model", [False, True], ids=["fasth3-four", "base-h3-50"])
++def test_runtime_projection_matches_sidecar_using_actual_h3_forwards(tmp_path, monkeypatch, mocker, base_model):
++    class Linear(torch.nn.Linear):
++        def __init__(self, in_features, out_features, *, params_dtype, bias=True, **kwargs):
++            super().__init__(in_features, out_features, bias=bias, dtype=params_dtype)
++
++        def forward(self, x):
++            return super().forward(x), None
++
++    monkeypatch.setattr(h3, "ColumnParallelLinear", Linear)
++    monkeypatch.setattr(h3, "RowParallelLinear", Linear)
++    arch, weights, payload, manifest, _ = _fixture(tmp_path, base_model=base_model)
++    embedder = h3.MiniMaxH3TimeEmbedder(arch, prefix="time_embedder")
++    runtime = MiniMaxH3RuntimeAdalnCache()
++    proj = h3.MiniMaxH3AdalnProj(
++        arch,
++        18 * arch.hidden_size,
++        None,
++        expand_ratio=6,
++        modality_num=3,
++        prefix="blocks.0.adaln_proj",
++        adaln_cache=runtime,
++    )
++    embedder.load_state_dict(
++        {
++            name.removeprefix("time_embedder."): value
++            for name, value in weights.items()
++            if name.startswith("time_embedder.")
++        }
++    )
++    proj.load_state_dict(
++        {
++            name.removeprefix("blocks.0.adaln_proj."): value
++            for name, value in weights.items()
++            if name.startswith("blocks.0.adaln_proj.")
++        }
++    )
++    calls = mocker.spy(proj.linear, "forward")
++    with torch.no_grad():
++        for _ in range(2):
++            for i, plan in enumerate(timestep_plans(manifest["schedule"])):
++                embedding = embedder(plan)
++                assert torch.equal(embedding, payload["time_embeddings"][i, : len(plan)])
++                runtime.prepare(embedding)
++                actual = torch.stack(proj(embedding), dim=1).reshape(len(plan), -1)
++                assert torch.equal(actual, payload["block_params"][i, : len(plan), 0])
++    plan_count = len(timestep_plans(manifest["schedule"]))
++    assert calls.call_count == plan_count and runtime.hits == plan_count
++
++
++def test_inference_weights_without_versions_use_safe_runtime_path(mocker):
++    with torch.inference_mode():
++        linear = torch.nn.Linear(2, 2)
++        x = torch.ones(1, 2)
++        cache = MiniMaxH3RuntimeAdalnCache()
++        compute = mocker.Mock(side_effect=lambda: linear(x))
++        cache.prepare(x)
++        cache.project("a", linear, x, compute)
++        linear.weight.add_(1)
++        assert torch.equal(cache.project("a", linear, x, compute), linear(x))
++        assert compute.call_count == 2 and not cache._entries
++
++
++def test_corrupt_optional_sidecar_falls_back_without_rejecting_model(tmp_path):
++    path = tmp_path / "truncated.safetensors"
++    path.write_bytes(b"truncated")
++    pipeline = object.__new__(MiniMaxH3Pipeline)
++    torch.nn.Module.__init__(pipeline)
++    pipeline.od_config = SimpleNamespace(cache_config={"cache": str(path)})
++    transformer = SimpleNamespace(arch=h3.MiniMaxH3DiTArchConfig(), adaln_cache=MiniMaxH3RuntimeAdalnCache())
++    pipeline._configure_adaln_sidecar(transformer, "cache", "fl2va", None, eligible=True)
++    assert not hasattr(transformer, "_adaln_sidecar_candidate")
+diff --git a/tests/diffusion/models/minimax_h3/test_adaln_cache_device.py b/tests/diffusion/models/minimax_h3/test_adaln_cache_device.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..7721043809cf0625c14ae2c35dc288649ee2bfbc
+--- /dev/null
++++ b/tests/diffusion/models/minimax_h3/test_adaln_cache_device.py
+@@ -0,0 +1,127 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
++"""Real vLLM projection/collective parity without loading an H3 checkpoint."""
++
++from datetime import timedelta
++
++import pytest
++import torch
++import torch.multiprocessing as mp
++
++from tests.helpers.mark import hardware_marks
++from vllm_omni.platforms import current_omni_platform
++
++pytestmark = [pytest.mark.core_model, pytest.mark.diffusion, pytest.mark.cuda]
++
++
++def _projection_worker(rank, world_size, rendezvous):
++    from vllm.config import DeviceConfig, VllmConfig, set_current_vllm_config
++    from vllm.distributed.parallel_state import (
++        cleanup_dist_env_and_memory,
++        init_distributed_environment,
++        initialize_model_parallel,
++    )
++
++    from vllm_omni.diffusion.models.minimax_h3.adaln_cache import MiniMaxH3RuntimeAdalnCache
++    from vllm_omni.diffusion.models.minimax_h3.minimax_h3_transformer import (
++        MiniMaxH3AdalnProj,
++        MiniMaxH3DiTArchConfig,
++    )
++
++    torch.set_num_threads(1)
++    device = torch.device("cuda", rank)
++    current_omni_platform.set_device(device)
++    config = VllmConfig(device_config=DeviceConfig(device="cuda"))
++    with set_current_vllm_config(config):
++        init_distributed_environment(
++            world_size=world_size,
++            rank=rank,
++            local_rank=rank,
++            distributed_init_method=f"file://{rendezvous}",
++            backend="nccl",
++            timeout=timedelta(seconds=45),
++        )
++        initialize_model_parallel(tensor_model_parallel_size=world_size)
++        try:
++            arch = MiniMaxH3DiTArchConfig(hidden_size=256, time_embed_dim=128)
++            cache = MiniMaxH3RuntimeAdalnCache()
++            generator = torch.Generator(device=device).manual_seed(11)
++            for name, expansion, modalities in (("blocks.0", 6, 3), ("final_layer", 2, 1)):
++                cache.clear()
++                projection = MiniMaxH3AdalnProj(
++                    arch,
++                    arch.hidden_size * expansion * modalities,
++                    None,
++                    expand_ratio=expansion,
++                    modality_num=modalities,
++                    prefix=name + ".adaln_proj",
++                    adaln_cache=cache,
++                ).to(device)
++                with torch.no_grad():
++                    for parameter in projection.parameters():
++                        parameter.normal_(std=0.05, generator=generator)
++                with torch.inference_mode():
++                    for width in (1, 2, 3, 4):
++                        embedding = torch.randn(width, arch.time_embed_dim, device=device, generator=generator)
++                        # No prepared input: run the original vLLM projector.
++                        cache.clear()
++                        expected = projection(embedding)
++                        cache.prepare(embedding)
++                        first = projection(embedding)
++                        hits = cache.hits
++                        second = projection(embedding)
++                        assert cache.hits == hits + 1
++                        for reference, cold, warm in zip(expected, first, second, strict=True):
++                            assert torch.equal(reference, cold)
++                            assert torch.equal(reference, warm)
++
++                        # Only one rank loses its entry. All ranks must execute
++                        # the gather again; a local-only hit would deadlock.
++                        if rank == world_size - 1:
++                            cache.clear()
++                        cache.prepare(embedding)
++                        misses = cache.misses
++                        rebuilt = projection(embedding)
++                        assert cache.misses == misses + 1
++                        for reference, actual in zip(expected, rebuilt, strict=True):
++                            assert torch.equal(reference, actual)
++
++                        if rank == world_size - 1:
++                            projection.linear.weight.add_(0.01)
++                        misses = cache.misses
++                        changed = projection(embedding)
++                        assert cache.misses == misses + 1
++                        cache.clear()
++                        reference = projection(embedding)
++                        for actual, original in zip(changed, reference, strict=True):
++                            assert torch.equal(actual, original)
++        finally:
++            cleanup_dist_env_and_memory()
++
++
++@pytest.mark.parametrize(
++    "world_size",
++    [
++        pytest.param(1, marks=hardware_marks(res={"cuda": ["H100", "B200"]}, num_cards=1)),
++        pytest.param(2, marks=hardware_marks(res={"cuda": ["H100", "B200"]}, num_cards=2)),
++    ],
++)
++def test_real_projection_cache_parity_and_rank_local_invalidation(tmp_path, world_size):
++    if not current_omni_platform.is_cuda():
++        pytest.skip("Requires CUDA")
++    context = mp.spawn(
++        _projection_worker,
++        args=(world_size, str(tmp_path / "rendezvous")),
++        nprocs=world_size,
++        join=False,
++    )
++    try:
++        if not context.join(timeout=90):
++            # ProcessContext may reap one successful worker per join.
++            if not context.join(timeout=30):
++                pytest.fail("AdaLN projection workers timed out")
++    finally:
++        for process in context.processes:
++            if process.is_alive():
++                process.terminate()
++            process.join(timeout=5)
+diff --git a/tools/minimax_h3/build_adaln_cache.py b/tools/minimax_h3/build_adaln_cache.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..653332355e1df535a5e56b6b158dffc14890ab99
+--- /dev/null
++++ b/tools/minimax_h3/build_adaln_cache.py
+@@ -0,0 +1,132 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
++"""Build an exact AdaLN sidecar from local native weights and a fixed adapter."""
++
++from __future__ import annotations
++
++import argparse
++import json
++import os
++import tempfile
++from pathlib import Path
++
++import torch
++from safetensors import safe_open
++from safetensors.torch import save_file
++
++from vllm_omni.diffusion.models.minimax_h3.adaln_cache import (
++    FORMAT_VERSION,
++    MODES,
++    MiniMaxH3AdalnCache,
++    build_cache,
++    canonical_json,
++    file_digest,
++    input_names,
++    schedule_contract,
++)
++from vllm_omni.diffusion.models.minimax_h3.fasth3 import FastH3WeightFusion
++from vllm_omni.diffusion.models.minimax_h3.minimax_h3_transformer import MiniMaxH3DiTArchConfig
++
++
++def main() -> None:
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--transformer-path", type=Path, required=True)
++    parser.add_argument("--output", type=Path, required=True)
++    parser.add_argument("--model-variant", choices=("fl2va", "ref2va"), required=True)
++    parser.add_argument("--mode", choices=tuple(MODES), default="t2va")
++    parser.add_argument("--num-inference-steps", type=int, default=None)
++    parser.add_argument("--flow-shift", type=float, default=12.0)
++    parser.add_argument("--audio-flow-shift", type=float, default=3.0)
++    parser.add_argument("--base-schedule", type=float, nargs="+")
++    parser.add_argument("--fasth3-adapter", type=Path)
++    parser.add_argument("--device", default="cuda", help="Use the serving device type; cpu is for CPU-only fixtures")
++    args = parser.parse_args()
++    root = args.transformer_path.expanduser().resolve()
++    if args.output.exists():
++        raise ValueError(f"Refusing to overwrite {args.output}")
++    config = json.loads((root / "config.json").read_text())
++    arch = MiniMaxH3DiTArchConfig.from_mapping(config)
++    variant = "ref2va" if args.mode.startswith("ref2va") else "fl2va"
++    if args.model_variant != variant:
++        raise ValueError("Cache mode does not match --model-variant")
++    device = torch.device(args.device)
++    if device.type not in {"cpu", "cuda"}:
++        raise ValueError("The builder supports CPU fixtures and CUDA serving")
++    fusion = None
++    if args.fasth3_adapter is not None:
++        if args.mode != "t2va" or args.model_variant != "fl2va":
++            raise ValueError("FastH3 Preview adapters support T2VA only")
++        fusion = FastH3WeightFusion.from_path(
++            args.fasth3_adapter,
++            head_dim=arch.attention_head_dim,
++            num_blocks=arch.num_layers,
++            num_refiner_blocks=arch.token_refiner_num_layers,
++        )
++        if fusion is None:
++            raise ValueError("Not a supported fixed FastH3 adapter")
++        if args.base_schedule is not None and tuple(args.base_schedule) != fusion.base_schedule:
++            raise ValueError("Explicit schedule does not match the FastH3 adapter")
++        args.base_schedule = fusion.base_schedule
++    num_steps = args.num_inference_steps
++    if num_steps is None:
++        num_steps = len(args.base_schedule) - 1 if args.base_schedule is not None else 50
++    contract = schedule_contract(
++        mode=args.mode,
++        num_steps=num_steps,
++        base_schedule=args.base_schedule,
++        flow_shift=args.flow_shift,
++        audio_flow_shift=args.audio_flow_shift,
++    )
++    adapter_sha = file_digest(fusion.source) if fusion is not None else None
++    index = root / "model.safetensors.index.json"
++    if index.is_file():
++        weight_map = json.loads(index.read_text())["weight_map"]
++    else:
++        single = root / "model.safetensors"
++        with safe_open(str(single), framework="pt", device="cpu") as source:
++            weight_map = {name: single.name for name in source.keys()}
++    required = input_names(arch.num_layers)
++    if missing := required - set(weight_map):
++        raise ValueError(f"Native checkpoint is missing AdaLN inputs: {sorted(missing)}")
++
++    def weights():
++        ordered = sorted(required, key=lambda name: (not name.startswith("time_embedder."), name))
++        for name in ordered:
++            filename = (root / weight_map[name]).resolve()
++            if not filename.is_relative_to(root):
++                # HF snapshot shards may be symlinks to blobs; use the lexical
++                # index path for containment, while allowing those symlinks.
++                relative = Path(weight_map[name])
++                if relative.is_absolute() or ".." in relative.parts:
++                    raise ValueError("Checkpoint index points outside the transformer directory")
++            with safe_open(str(filename), framework="pt", device="cpu") as source:
++                weight = source.get_tensor(name)
++                if fusion is not None:
++                    weight = fusion.fuse(name, weight.to(device))
++                yield name, weight
++
++    payload, manifest = build_cache(
++        arch,
++        weights(),
++        contract=contract,
++        model_variant=args.model_variant,
++        adapter_sha256=adapter_sha,
++        device=device,
++    )
++    if fusion is not None and file_digest(fusion.source) != adapter_sha:
++        raise ValueError("Adapter changed during cache construction")
++    args.output.parent.mkdir(parents=True, exist_ok=True)
++    descriptor, temporary = tempfile.mkstemp(prefix=".adaln-", suffix=".safetensors", dir=args.output.parent)
++    os.close(descriptor)
++    try:
++        save_file(payload, temporary, metadata={"format_version": FORMAT_VERSION, "manifest": canonical_json(manifest)})
++        MiniMaxH3AdalnCache(arch, path=temporary, model_variant=args.model_variant)
++        # Atomic no-clobber publication on the same filesystem.
++        os.link(temporary, args.output)
++    finally:
++        Path(temporary).unlink(missing_ok=True)
++    print(f"Wrote weight-bound AdaLN sidecar: {args.output}")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/vllm_omni/diffusion/models/minimax_h3/adaln_cache.py b/vllm_omni/diffusion/models/minimax_h3/adaln_cache.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..9022d71ccc3380348957f50ecdc81739765d3cc2
+--- /dev/null
++++ b/vllm_omni/diffusion/models/minimax_h3/adaln_cache.py
+@@ -0,0 +1,538 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM-Omni project
++"""Default exact AdaLN memoization and optional weight-bound startup sidecars.
++
++This is not a cross-step approximation. The main blocks' and final layer's
++AdaLN outputs are reused only for identical inputs and unchanged weights. All
++weights remain available for new schedules and adapters. Legacy experimental
++sidecars without weight identities are rejected.
++"""
++
++from __future__ import annotations
++
++import hashlib
++import json
++import math
++import weakref
++from collections.abc import Callable, Iterable, Mapping, Sequence
++from pathlib import Path
++from typing import TYPE_CHECKING, Any
++
++import torch
++from safetensors import safe_open
++from torch import nn
++
++from .time_request import minimax_h3_time_shift_sigmas
++
++if TYPE_CHECKING:
++    from .minimax_h3_transformer import MiniMaxH3DiTArchConfig
++
++FORMAT_VERSION = "4"
++MODES = {
++    "t2va": ("video", "audio"),
++    "fl2va": ("video", "audio", "image"),
++    "ref2va-image": ("video", "audio", "image"),
++    "ref2va-audio": ("video", "audio", "audio_ref"),
++    "ref2va-mixed": ("video", "audio", "image", "audio_ref"),
++}
++PAYLOAD_NAMES = frozenset({"plan_timesteps", "plan_lengths", "time_embeddings", "block_params", "final_params"})
++
++
++class MiniMaxH3RuntimeAdalnCache:
++    """Bounded memoization of the actual runtime projection results.
++
++    No device, task, schedule or precision is selected here. The existing
++    projection remains the builder, including quantization, LoRA and TP. The
++    input embedding is hashed once per DiT forward; each layer also checks its
++    parameter/buffer versions. TP ranks vote before skipping a collective.
++    """
++
++    def __init__(self, *, max_bytes: int = 256 * 1024**2) -> None:
++        if type(max_bytes) is not int or max_bytes < 0:
++            raise ValueError("AdaLN cache budget must be a nonnegative byte count")
++        self.max_bytes = max_bytes
++        self._entries: dict[tuple[str, str], tuple[Any, torch.Tensor, int]] = {}
++        self._bytes = 0
++        self._input: weakref.ReferenceType[torch.Tensor] | None = None
++        self._key: str | None = None
++        self.hits = self.misses = 0
++        self.sidecar: MiniMaxH3AdalnCache | None = None
++        self._sidecar_signatures: dict[str, Any] = {}
++        self._sidecar_plan: int | None = None
++
++    def clear(self) -> None:
++        self._entries.clear()
++        self._bytes = 0
++        self._input = None
++        self._key = None
++        self.sidecar = None
++        self._sidecar_signatures.clear()
++        self._sidecar_plan = None
++
++    def seed(self, sidecar: MiniMaxH3AdalnCache, modules: Mapping[str, nn.Module]) -> None:
++        self.sidecar = sidecar
++        self._sidecar_signatures = {name: self._signature(module) for name, module in modules.items()}
++
++    def prepare(self, embedding: torch.Tensor) -> None:
++        self._input = None
++        self._key = None
++        self._sidecar_plan = None
++        if not self.max_bytes or torch.is_grad_enabled() or torch.compiler.is_compiling():
++            return
++        self._key = tensor_digest(embedding) + canonical_json(
++            [
++                torch.get_float32_matmul_precision(),
++                torch.is_autocast_enabled(embedding.device.type),
++                str(torch.get_autocast_dtype(embedding.device.type)),
++                torch.backends.cuda.matmul.allow_tf32,
++                torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction,
++            ]
++        )
++        self._input = weakref.ref(embedding)
++        if self.sidecar is not None:
++            if math_identity(embedding.device) != self.sidecar.manifest["math"]:
++                self.sidecar = None
++                return
++            for index, count in enumerate(self.sidecar.plan_lengths.tolist()):
++                expected = self.sidecar.time_embeddings[index, :count]
++                if embedding.shape == expected.shape and torch.equal(embedding, expected):
++                    self._sidecar_plan = index
++                    break
++
++    @staticmethod
++    def _signature(module: nn.Module) -> tuple[Any, ...]:
++        # A replaced or restored storage conservatively causes a miss. The
++        # containing block's offload hooks still run before this method.
++        tensors = [*module.named_parameters(), *module.named_buffers()]
++        # vLLM LoRA stores these tensors outside registered buffers. Its
++        # suspend/resume mask can change without changing the base weights.
++        for field in ("lora_a_stacked", "lora_b_stacked"):
++            tensors.extend((f"{field}.{i}", value) for i, value in enumerate(getattr(module, field, ())))
++        return (
++            id(module),
++            id(getattr(module, "quant_method", None)),
++            getattr(module, "_diffusion_lora_active_slices", None),
++            *(
++                (name, id(value), value.data_ptr(), value._version, tuple(value.shape), value.dtype, value.device)
++                for name, value in tensors
++            ),
++        )
++
++    def project(
++        self,
++        name: str,
++        module: nn.Module,
++        embedding: torch.Tensor,
++        compute: Callable[[], torch.Tensor],
++    ) -> torch.Tensor:
++        if (
++            torch.is_grad_enabled()
++            or torch.compiler.is_compiling()
++            or self._key is None
++            or self._input is None
++            or self._input() is not embedding
++        ):
++            return compute()
++        key = self._key, name
++        try:
++            signature = self._signature(module)
++            if module._forward_pre_hooks or module._forward_hooks:
++                # A linear hook may mutate weights or transform the output;
++                # executing it only on misses would change its semantics.
++                signature = None
++        except RuntimeError:
++            # Inference tensors without version counters cannot establish that
++            # weights stayed unchanged. Still participate in the TP vote.
++            signature = None
++        cached = self._entries.get(key)
++        hit = signature is not None and cached is not None and cached[0] == signature
++        from vllm.distributed import get_tensor_model_parallel_world_size, get_tp_group
++
++        world_size = get_tensor_model_parallel_world_size()
++        if world_size > 1:
++            vote = torch.tensor([int(hit)], device=embedding.device, dtype=torch.int32)
++            hit = int(get_tp_group().all_reduce(vote).item()) == world_size
++        if hit:
++            assert cached is not None
++            self.hits += 1
++            return cached[1]
++        self.misses += 1
++        if (
++            world_size == 1
++            and self.sidecar is not None
++            and self._sidecar_plan is not None
++            and signature is not None
++            and self._sidecar_signatures.get(name) == signature
++            and not torch.is_autocast_enabled(embedding.device.type)
++        ):
++            index, count = self._sidecar_plan, embedding.shape[0]
++            if name.startswith("blocks."):
++                value = self.sidecar.block_params[index, :count, int(name.split(".")[1])].contiguous()
++            else:
++                value = self.sidecar.final_params[index, :count].contiguous()
++        else:
++            value = compute()
++        if cached is not None:
++            self._bytes -= self._entries.pop(key)[2]
++        size = value.numel() * value.element_size()
++        if signature is not None and self._bytes + size <= self.max_bytes:
++            # Retain a reusable subset when a long base-H3 schedule exceeds
++            # the budget. LRU would evict every entry before the next request
++            # reaches it, producing zero hits for a repeated cyclic schedule.
++            # Own the cached storage even if a provider returns workspace views.
++            self._entries[key] = (signature, value.detach().clone(), size)
++            self._bytes += size
++        return value
++
++
++def canonical_json(value: Any) -> str:
++    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
++
++
++def tensor_digest(tensor: torch.Tensor) -> str:
++    """Hash dtype, shape and actual bytes, including BF16, without widening."""
++    value = tensor.detach().cpu().contiguous()
++    digest = hashlib.sha256(canonical_json([str(value.dtype), list(value.shape)]).encode())
++    digest.update(memoryview(value.reshape(-1).view(torch.uint8).numpy()))
++    return digest.hexdigest()
++
++
++def file_digest(path: str | Path) -> str:
++    digest = hashlib.sha256()
++    with Path(path).open("rb") as source:
++        while chunk := source.read(16 * 1024 * 1024):
++            digest.update(chunk)
++    return digest.hexdigest()
++
++
++def projection_names(num_layers: int) -> frozenset[str]:
++    prefixes = [f"blocks.{i}.adaln_proj.linear" for i in range(num_layers)]
++    prefixes.append("final_layer.adaln_proj.linear")
++    return frozenset(f"{prefix}.{kind}" for prefix in prefixes for kind in ("weight", "bias"))
++
++
++def input_names(num_layers: int) -> frozenset[str]:
++    return projection_names(num_layers) | {
++        f"time_embedder.{module}.{kind}" for module in ("proj_in", "proj_out") for kind in ("weight", "bias")
++    }
++
++
++def architecture(arch: MiniMaxH3DiTArchConfig) -> dict[str, int]:
++    return {
++        key: getattr(arch, key)
++        for key in ("num_layers", "hidden_size", "timestep_input_dim", "time_embed_hidden_size", "time_embed_dim")
++    }
++
++
++def math_identity(device: torch.device) -> dict[str, Any]:
++    """Conservatively bind the builder's numerical environment (TP1 only)."""
++    result = {
++        "torch": str(torch.__version__),
++        "device_type": device.type,
++        "float32_matmul_precision": torch.get_float32_matmul_precision(),
++    }
++    if device.type == "cuda":
++        from vllm_omni.platforms import current_omni_platform
++
++        capability = current_omni_platform.get_device_capability(device.index or 0)
++        result.update(
++            cuda=torch.version.cuda,
++            capability=list(capability) if capability is not None else None,
++            allow_tf32=torch.backends.cuda.matmul.allow_tf32,
++            allow_bf16_reduced_precision_reduction=torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction,
++        )
++    return result
++
++
++def schedule_contract(
++    *, mode: str, num_steps: int, base_schedule: Sequence[float] | None, flow_shift: float, audio_flow_shift: float
++) -> dict[str, Any]:
++    if mode not in MODES:
++        raise ValueError(f"Unsupported AdaLN cache mode: {mode}")
++    if type(num_steps) is not int or num_steps < (2 if base_schedule is None else 1):
++        raise ValueError("AdaLN cache requires a positive complete denoising schedule")
++    for value in (flow_shift, audio_flow_shift):
++        if not math.isfinite(value) or value <= 0:
++            raise ValueError("AdaLN cache shifts must be finite and positive")
++    if base_schedule is not None:
++        from vllm_omni.diffusion.sched.sigma_schedule import DMD2SigmaSchedule
++
++        schedule = DMD2SigmaSchedule.from_positions(base_schedule)
++        if schedule.num_inference_steps != num_steps:
++            raise ValueError("AdaLN cache step count does not match the explicit schedule")
++        base_schedule = schedule.base_schedule
++    return dict(
++        mode=mode,
++        num_steps=num_steps,
++        base_schedule=list(base_schedule) if base_schedule is not None else None,
++        flow_shift=float(flow_shift),
++        audio_flow_shift=float(audio_flow_shift),
++    )
++
++
++def timestep_plans(contract: Mapping[str, Any]) -> list[torch.Tensor]:
++    """Use the serving scheduler and its conditioning timesteps, without interpolation."""
++    from .denoise_loop import MINIMAX_H3_AUDIO_REF_COND_TIMESTEP, MINIMAX_H3_IMGVID_COND_TIMESTEP
++
++    video = minimax_h3_time_shift_sigmas(
++        num_steps=contract["num_steps"], shift_scale=contract["flow_shift"], base_schedule=contract["base_schedule"]
++    )
++    audio = minimax_h3_time_shift_sigmas(
++        num_steps=contract["num_steps"],
++        shift_scale=contract["audio_flow_shift"],
++        base_schedule=contract["base_schedule"],
++    )
++    plans: dict[tuple[float, ...], torch.Tensor] = {}
++    for video_sigma, audio_sigma in zip(video[:-1], audio[:-1], strict=True):
++        values = {
++            "video": 1.0 - video_sigma,
++            "audio": 1.0 - audio_sigma,
++            "image": max(1.0 - video_sigma, MINIMAX_H3_IMGVID_COND_TIMESTEP),
++            "audio_ref": max(1.0 - audio_sigma, MINIMAX_H3_AUDIO_REF_COND_TIMESTEP),
++        }
++        plan = torch.tensor([values[key] for key in MODES[contract["mode"]]], dtype=torch.float32).unique(sorted=True)
++        plans[tuple(plan.tolist())] = plan
++    return list(plans.values())
++
++
++class MiniMaxH3AdalnCache(nn.Module):
++    """Validate an optional sidecar, then verify its weights at load.
++
++    Hashes are checked against the *post-fusion* stream, before TP conversion.
++    They cover all inputs of the cached computation, not unrelated QKV/MLP
++    weights. A fixed adapter has an additional complete-file identity.
++    """
++
++    block_params: torch.Tensor
++    final_params: torch.Tensor
++    plan_timesteps: torch.Tensor
++    plan_lengths: torch.Tensor
++    time_embeddings: torch.Tensor
++
++    def __init__(self, arch: MiniMaxH3DiTArchConfig, *, path: str, model_variant: str) -> None:
++        super().__init__()
++        self.path = str(Path(path).expanduser().resolve())
++        self.arch = arch
++        self._verified: set[str] = set()
++        self._adapter_bound = False
++        self._ready = False
++        with safe_open(self.path, framework="pt", device="cpu") as source:
++            metadata = source.metadata() or {}
++            if metadata.get("format_version") != FORMAT_VERSION:
++                raise ValueError("Rebuild the AdaLN cache: a weight-bound format-v4 sidecar is required")
++            try:
++                manifest = json.loads(metadata["manifest"])
++            except (KeyError, TypeError, ValueError) as exc:
++                raise ValueError("Invalid AdaLN cache manifest") from exc
++            required = {"architecture", "model_variant", "schedule", "adapter_sha256", "weights", "payload", "math"}
++            if not isinstance(manifest, dict) or set(manifest) != required:
++                raise ValueError("Invalid AdaLN cache manifest fields")
++            if any(
++                not isinstance(manifest[key], dict)
++                for key in ("architecture", "schedule", "weights", "payload", "math")
++            ):
++                raise ValueError("Invalid AdaLN cache manifest objects")
++            if manifest["architecture"] != architecture(arch) or manifest["model_variant"] != model_variant:
++                raise ValueError("AdaLN cache model variant or architecture mismatch")
++            contract = schedule_contract(**manifest["schedule"])
++            variant = "ref2va" if contract["mode"].startswith("ref2va") else "fl2va"
++            if variant != model_variant:
++                raise ValueError("AdaLN cache task does not match model variant")
++            if set(manifest["weights"]) != input_names(arch.num_layers):
++                raise ValueError("AdaLN cache must cover exactly the time embedding and AdaLN parameters")
++            if set(source.keys()) != PAYLOAD_NAMES or set(manifest["payload"]) != PAYLOAD_NAMES:
++                raise ValueError("Invalid AdaLN cache payload keys")
++            for digest in [*manifest["weights"].values(), *manifest["payload"].values()]:
++                if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
++                    raise ValueError("Invalid AdaLN cache SHA256 digest")
++            adapter = manifest["adapter_sha256"]
++            if adapter is not None and (
++                not isinstance(adapter, str) or len(adapter) != 64 or any(c not in "0123456789abcdef" for c in adapter)
++            ):
++                raise ValueError("Invalid AdaLN cache adapter identity")
++            payload = {name: source.get_tensor(name) for name in PAYLOAD_NAMES}
++        plans = timestep_plans(contract)
++        width = max(len(plan) for plan in plans)
++        expected_lengths = torch.tensor([len(plan) for plan in plans], dtype=torch.int64)
++        expected_plans = torch.zeros((len(plans), width), dtype=torch.float32)
++        for index, plan in enumerate(plans):
++            expected_plans[index, : len(plan)] = plan
++        shapes = {
++            "block_params": ((len(plans), width, arch.num_layers, 18 * arch.hidden_size), torch.bfloat16),
++            "final_params": ((len(plans), width, 2 * arch.hidden_size), torch.bfloat16),
++            "time_embeddings": ((len(plans), width, arch.time_embed_dim), torch.float32),
++            "plan_timesteps": (tuple(expected_plans.shape), torch.float32),
++            "plan_lengths": (tuple(expected_lengths.shape), torch.int64),
++        }
++        for name, value in payload.items():
++            shape, dtype = shapes[name]
++            if tuple(value.shape) != shape or value.dtype != dtype or not bool(torch.isfinite(value).all()):
++                raise ValueError(f"Invalid AdaLN cache tensor: {name}")
++            if tensor_digest(value) != manifest["payload"][name]:
++                raise ValueError(f"AdaLN cache payload checksum mismatch: {name}")
++        if not torch.equal(payload["plan_timesteps"], expected_plans) or not torch.equal(
++            payload["plan_lengths"], expected_lengths
++        ):
++            raise ValueError("AdaLN cache timestep plans do not match the declared schedule")
++        self.manifest = manifest
++        self.projection_names = projection_names(arch.num_layers)
++        for name, value in payload.items():
++            self.register_buffer(name, value, persistent=False)
++
++    def bind_adapter(self, adapter_sha256: str | None) -> None:
++        if adapter_sha256 != self.manifest["adapter_sha256"]:
++            raise ValueError("AdaLN cache adapter mismatch; rebuild for the active fixed adapter")
++        self._adapter_bound = True
++
++    def verify_weight(self, name: str, weight: torch.Tensor) -> None:
++        if name not in self.manifest["weights"]:
++            return
++        if self._ready or name in self._verified:
++            raise ValueError(f"AdaLN input was loaded more than once: {name}")
++        if tensor_digest(weight) != self.manifest["weights"][name]:
++            raise ValueError(f"AdaLN cache effective weight mismatch: {name}")
++        self._verified.add(name)
++
++    def finish_loading(self, device: torch.device) -> None:
++        if not self._adapter_bound:
++            raise ValueError("AdaLN cache requires the active adapter identity before loading")
++        missing = input_names(self.arch.num_layers) - self._verified
++        if missing:
++            raise ValueError(f"Missing AdaLN cache source weights: {sorted(missing)}")
++        if math_identity(device) != self.manifest["math"]:
++            raise ValueError("AdaLN cache numerical environment mismatch; rebuild on the serving configuration")
++        self.to(device=device)
++        self._ready = True
++
++    def check_request(
++        self,
++        *,
++        mode: str,
++        num_steps: int,
++        base_schedule: Sequence[float] | None,
++        flow_shift: float,
++        audio_flow_shift: float,
++    ) -> None:
++        contract = schedule_contract(
++            mode=mode,
++            num_steps=num_steps,
++            base_schedule=base_schedule,
++            flow_shift=flow_shift,
++            audio_flow_shift=audio_flow_shift,
++        )
++        if contract != self.manifest["schedule"]:
++            raise ValueError("AdaLN cache request schedule/task mismatch; rebuild or disable the cache")
++
++    def lookup(self, timesteps: torch.Tensor) -> tuple[tuple[tuple[torch.Tensor, ...], ...], tuple[torch.Tensor, ...]]:
++        if not self._ready:
++            raise RuntimeError("AdaLN cache has not verified its source weights")
++        if timesteps.dtype != torch.float32:
++            raise ValueError("AdaLN cache requires exact FP32 timesteps")
++        values = timesteps.reshape(-1).to(self.plan_timesteps.device)
++        count = values.numel()
++        if not 0 < count <= self.plan_timesteps.shape[1]:
++            raise ValueError("AdaLN cache does not cover this timestep plan")
++        matches = self.plan_lengths.eq(count) & self.plan_timesteps[:, :count].eq(values).all(dim=1)
++        if not bool(matches.any()):
++            raise ValueError("AdaLN cache does not cover this timestep plan")
++        index = matches.to(torch.int64).argmax()
++        blocks = self.block_params.permute(2, 0, 1, 3)[:, index, :count]
++        blocks = blocks.reshape(self.arch.num_layers, -1, 6, self.arch.hidden_size)
++        final = self.final_params[index, :count].reshape(-1, 2, self.arch.hidden_size)
++        return tuple(tuple(layer.unbind(1)) for layer in blocks), tuple(final.unbind(1))
++
++
++@torch.inference_mode()
++def build_cache(
++    arch: MiniMaxH3DiTArchConfig,
++    weights: Iterable[tuple[str, torch.Tensor]],
++    *,
++    contract: dict[str, Any],
++    model_variant: str,
++    adapter_sha256: str | None,
++    device: torch.device,
++) -> tuple[dict[str, torch.Tensor], dict[str, Any]]:
++    """Stream one projection at a time; do not instantiate the full DiT.
++
++    The four time-embedder tensors must precede the AdaLN projections. Callers
++    fuse any fixed adapter before supplying this stream, just like serving.
++    """
++    from .minimax_h3_transformer import MiniMaxH3TimeEmbedder
++
++    contract = schedule_contract(**contract)
++    plans = timestep_plans(contract)
++    width = max(len(plan) for plan in plans)
++    payload = {
++        "plan_timesteps": torch.zeros((len(plans), width), dtype=torch.float32),
++        "plan_lengths": torch.tensor([len(plan) for plan in plans], dtype=torch.int64),
++        "block_params": torch.zeros((len(plans), width, arch.num_layers, 18 * arch.hidden_size), dtype=torch.bfloat16),
++        "final_params": torch.zeros((len(plans), width, 2 * arch.hidden_size), dtype=torch.bfloat16),
++        "time_embeddings": torch.zeros((len(plans), width, arch.time_embed_dim), dtype=torch.float32),
++    }
++    for i, plan in enumerate(plans):
++        payload["plan_timesteps"][i, : len(plan)] = plan
++
++    # Use the runtime embedding implementation, including FP32 boundaries. A
++    # lightweight module supplies ordinary Linear wrappers with TP1 semantics.
++    class Linear(nn.Linear):
++        def forward(self, x):
++            return super().forward(x), None
++
++    embedder = MiniMaxH3TimeEmbedder.__new__(MiniMaxH3TimeEmbedder)
++    nn.Module.__init__(embedder)
++    embedder.frequency_embedding_size = arch.timestep_input_dim
++    embedder.proj_in = Linear(arch.timestep_input_dim, arch.time_embed_hidden_size, device=device, dtype=torch.float32)
++    embedder.proj_out = Linear(arch.time_embed_hidden_size, arch.time_embed_dim, device=device, dtype=torch.float32)
++    fingerprints: dict[str, str] = {}
++    pending: dict[str, torch.Tensor] = {}
++    inputs: list[torch.Tensor] | None = None
++    for name, weight in weights:
++        if name not in input_names(arch.num_layers) or name in fingerprints:
++            raise ValueError(f"Unexpected or duplicate AdaLN builder input: {name}")
++        dtype = torch.float32 if name.startswith("time_embedder.") else torch.bfloat16
++        if weight.dtype != dtype or not bool(torch.isfinite(weight).all()):
++            raise ValueError(f"Invalid AdaLN builder input dtype/values: {name}")
++        fingerprints[name] = tensor_digest(weight)
++        if name.startswith("time_embedder."):
++            target = dict(embedder.named_parameters())[name.removeprefix("time_embedder.")]
++            if weight.shape != target.shape:
++                raise ValueError(f"Invalid AdaLN time embedding shape: {name}")
++            target.copy_(weight)
++            continue
++        if inputs is None:
++            if len([key for key in fingerprints if key.startswith("time_embedder.")]) != 4:
++                raise ValueError("Supply all four time embedding weights before the AdaLN projections")
++            embeddings = [embedder(plan.to(device)) for plan in plans]
++            for index, embedding in enumerate(embeddings):
++                payload["time_embeddings"][index, : len(embedding)].copy_(embedding.cpu())
++            inputs = [nn.functional.silu(embedding).to(torch.bfloat16) for embedding in embeddings]
++        pending[name] = weight.to(device)
++        prefix = name.rsplit(".", 1)[0]
++        if f"{prefix}.weight" not in pending or f"{prefix}.bias" not in pending:
++            continue
++        w, bias = pending.pop(f"{prefix}.weight"), pending.pop(f"{prefix}.bias")
++        is_final = prefix.startswith("final_layer.")
++        out_dim = (2 if is_final else 18) * arch.hidden_size
++        if w.shape != (out_dim, arch.time_embed_dim) or bias.shape != (out_dim,):
++            raise ValueError(f"Invalid AdaLN projection shape: {prefix}")
++        for i, x in enumerate(inputs):
++            result = nn.functional.linear(x, w, bias).cpu()
++            if is_final:
++                payload["final_params"][i, : len(x)].copy_(result)
++            else:
++                payload["block_params"][i, : len(x), int(prefix.split(".")[1])].copy_(result)
++        del w, bias
++    if set(fingerprints) != input_names(arch.num_layers) or pending:
++        raise ValueError("Incomplete AdaLN builder input weights")
++    if any(not bool(torch.isfinite(value).all()) for value in payload.values()):
++        raise ValueError("Non-finite AdaLN builder output")
++    manifest = dict(
++        architecture=architecture(arch),
++        model_variant=model_variant,
++        schedule=contract,
++        adapter_sha256=adapter_sha256,
++        weights=fingerprints,
++        payload={name: tensor_digest(value) for name, value in payload.items()},
++        math=math_identity(device),
++    )
++    return payload, manifest
+diff --git a/vllm_omni/diffusion/models/minimax_h3/minimax_h3_transformer.py b/vllm_omni/diffusion/models/minimax_h3/minimax_h3_transformer.py
+index 5662a964119d790079839bae24663aa01d260b34..115264a489611c96b3e2df3638d649727cab6f86 100644
+--- a/vllm_omni/diffusion/models/minimax_h3/minimax_h3_transformer.py
++++ b/vllm_omni/diffusion/models/minimax_h3/minimax_h3_transformer.py
+@@ -55,6 +55,7 @@ from vllm_omni.diffusion.layers.rope import RotaryEmbedding
+ from vllm_omni.diffusion.models.host_weight_contract import FinalLayoutModelContract
+ from vllm_omni.platforms import current_omni_platform
+ 
++from .adaln_cache import MiniMaxH3RuntimeAdalnCache
+ from .fasth3 import _resolve_native_target
+ 
+ if TYPE_CHECKING:
+@@ -759,12 +760,15 @@ class MiniMaxH3AdalnProj(nn.Module):
+         expand_ratio: int,
+         modality_num: int,
+         prefix: str,
++        adaln_cache: MiniMaxH3RuntimeAdalnCache | None = None,
+     ) -> None:
+         super().__init__()
+         if out_features != expand_ratio * arch.hidden_size * modality_num:
+             raise ValueError(
+                 f"adaln out_features mismatch: {out_features} != {expand_ratio}*{arch.hidden_size}*{modality_num}"
+             )
++        self._adaln_cache = adaln_cache
++        self._cache_name = prefix + ".linear"
+         self.expand_ratio = expand_ratio
+         self.modality_num = modality_num
+         self.hidden_size = arch.hidden_size
+@@ -780,8 +784,16 @@ class MiniMaxH3AdalnProj(nn.Module):
+ 
+     def forward(self, t_emb: torch.Tensor) -> tuple[torch.Tensor, ...]:
+         """t_emb: [M, t_dim] -> expand_ratio tensors of [M*modality_num, H]."""
+-        x = nn.functional.silu(t_emb)
+-        x, _ = self.linear(x.to(_BF16_DTYPE))
++
++        def project() -> torch.Tensor:
++            x = nn.functional.silu(t_emb)
++            return self.linear(x.to(_BF16_DTYPE))[0]
++
++        x = (
++            project()
++            if self._adaln_cache is None
++            else self._adaln_cache.project(self._cache_name, self.linear, t_emb, project)
++        )
+         m = x.shape[0]
+         x = x.view(m * self.modality_num, self.expand_ratio * self.hidden_size)
+         return tuple(x.chunk(self.expand_ratio, dim=-1))
+@@ -877,6 +889,7 @@ class MiniMaxH3DiTBlock(nn.Module):
+         quant_config: QuantizationConfig | None,
+         *,
+         prefix: str,
++        adaln_cache: MiniMaxH3RuntimeAdalnCache | None = None,
+     ) -> None:
+         super().__init__()
+         self.norm1 = _norm(arch.hidden_size, eps=arch.norm_eps)
+@@ -900,6 +913,7 @@ class MiniMaxH3DiTBlock(nn.Module):
+             expand_ratio=6,
+             modality_num=MINIMAX_H3_ADALN_MODALITY_NUM,
+             prefix=f"{prefix}.adaln_proj",
++            adaln_cache=adaln_cache,
+         )
+ 
+     def forward(
+@@ -975,6 +989,7 @@ class MiniMaxH3FinalLayer(nn.Module):
+         quant_config: QuantizationConfig | None,
+         *,
+         prefix: str,
++        adaln_cache: MiniMaxH3RuntimeAdalnCache | None = None,
+     ) -> None:
+         super().__init__()
+         video_patch_dim = arch.latents_dim * arch.patch_size[0] * arch.patch_size[1] * arch.patch_size[2]
+@@ -986,6 +1001,7 @@ class MiniMaxH3FinalLayer(nn.Module):
+             expand_ratio=2,
+             modality_num=1,
+             prefix=f"{prefix}.adaln_proj",
++            adaln_cache=adaln_cache,
+         )
+         self.video_out = ColumnParallelLinear(
+             arch.hidden_size,
+@@ -1164,6 +1180,15 @@ class MiniMaxH3DiTModel(nn.Module):
+         self._rope_theta = float(config_mapping.get("rope_theta", 10000.0))
+         arch = MiniMaxH3DiTArchConfig.from_mapping(config_mapping)
+         self.arch = arch
++        cache_config = getattr(od_config, "cache_config", {})
++        enabled = (
++            cache_config.get("minimax_h3_adaln_cache", True)
++            if isinstance(cache_config, Mapping)
++            else getattr(cache_config, "minimax_h3_adaln_cache", True)
++        )
++        if type(enabled) is not bool:
++            raise ValueError("minimax_h3_adaln_cache must be a boolean")
++        self.adaln_cache = MiniMaxH3RuntimeAdalnCache(max_bytes=256 * 1024**2 if enabled else 0)
+         self.od_config = od_config
+         self.parallel_config = od_config.parallel_config
+         self.hidden_size = arch.hidden_size
+@@ -1227,6 +1252,7 @@ class MiniMaxH3DiTModel(nn.Module):
+                     arch,
+                     quant_config,
+                     prefix=f"blocks.{i}",
++                    adaln_cache=self.adaln_cache,
+                 )
+                 for i in range(arch.num_layers)
+             ]
+@@ -1239,6 +1265,7 @@ class MiniMaxH3DiTModel(nn.Module):
+             arch,
+             quant_config,
+             prefix="final_layer",
++            adaln_cache=self.adaln_cache,
+         )
+         self._mark_missing_params_required()
+ 
+@@ -1311,6 +1338,12 @@ class MiniMaxH3DiTModel(nn.Module):
+         if rope_table.dtype != _BF16_DTYPE:
+             raise ValueError(f"rope_table must be {_BF16_DTYPE}, got {rope_table.dtype}.")
+ 
++    def _apply(self, fn, recurse=True):
++        # Derived outputs must not keep the old device alive after offload/move.
++        if getattr(self, "adaln_cache", None) is not None:
++            self.adaln_cache.clear()
++        return super()._apply(fn, recurse=recurse)
++
+     def post_load_weights(self) -> None:
+         for name, param in self.named_parameters():
+             if name in MINIMAX_H3_FP32_PARAM_NAMES and param.dtype != _FP32_DTYPE:
+@@ -1328,6 +1361,8 @@ class MiniMaxH3DiTModel(nn.Module):
+         weights: Iterable[tuple[str, torch.Tensor]],
+     ) -> set[str]:
+         """Load native or Diffusers H3 weights with the existing TP-aware loaders."""
++        if getattr(self, "adaln_cache", None) is not None:
++            self.adaln_cache.clear()
+         params = dict(self.named_parameters())
+         params.update(dict(self.named_buffers()))
+         loaded: set[str] = set()
+@@ -1606,6 +1641,9 @@ class MiniMaxH3DiTModel(nn.Module):
+             local_span=local_span,
+         )
+ 
++        if getattr(self, "adaln_cache", None) is not None:
++            self.adaln_cache.prepare(t_emb)
++
+         combined_indices = (inverse_indices * MINIMAX_H3_ADALN_MODALITY_NUM + token_tags.clamp(min=0)).to(device)
+         inverse_indices = inverse_indices.to(device)
+ 
+diff --git a/vllm_omni/diffusion/models/minimax_h3/pipeline_minimax_h3.py b/vllm_omni/diffusion/models/minimax_h3/pipeline_minimax_h3.py
+index 8fc1514efca50c739c73035080f4607beba60c6a..200e373419da007fb12e8832e9f49d264fe7d07b 100644
+--- a/vllm_omni/diffusion/models/minimax_h3/pipeline_minimax_h3.py
++++ b/vllm_omni/diffusion/models/minimax_h3/pipeline_minimax_h3.py
+@@ -63,6 +63,7 @@ from vllm_omni.diffusion.sched.sigma_schedule import DMD2SigmaSchedule
+ from vllm_omni.diffusion.utils.media_utils import normalize_preencode_batch_frames, normalize_video_codec_options
+ from vllm_omni.diffusion.worker.request_batch import DiffusionRequestBatch
+ from vllm_omni.errors import OmniClientError, client_error_from_metadata
++from vllm_omni.inputs.data import OmniDiffusionSamplingParams
+ from vllm_omni.model_executor.model_loader.weight_utils import (
+     download_weights_from_hf_specific,
+ )
+@@ -642,6 +643,7 @@ class MiniMaxH3Pipeline(
+     ) -> tuple[LoRAModel, PEFTHelper] | None:
+         # A cache eviction may be followed by a different adapter reusing the
+         # same client-supplied ID. Every real load replaces the classification.
++        self._clear_adaln_caches()
+         self._turbo_lora_specs.pop(lora_request.lora_int_id, None)
+         self._native_lora_adapter_ids.discard(lora_request.lora_int_id)
+         self._lora_sigma_schedules.pop(lora_request.lora_int_id, None)
+@@ -976,6 +978,22 @@ class MiniMaxH3Pipeline(
+                 audio_shift=self.default_audio_shift,
+             )
+ 
++        self._configure_adaln_sidecar(
++            self.transformer,
++            "minimax_h3_adaln_cache_path",
++            expected_partition,
++            self._fasth3.source if self._fasth3 is not None else None,
++            eligible=transformer_quant_config is None and not modular,
++        )
++        if ref2va_model_path is not None:
++            self._configure_adaln_sidecar(
++                self.transformers_ref,
++                "minimax_h3_ref_adaln_cache_path",
++                "ref2va",
++                None,
++                eligible=transformer_quant_config is None and not modular,
++            )
++
+         if self.load_text_encoder:
+             self.tokenizer = Qwen2TokenizerFast.from_pretrained(
+                 str(model_path),
+@@ -1104,11 +1122,14 @@ class MiniMaxH3Pipeline(
+                 # Fuse before the model shards anything, which is also the only
+                 # point where the checkpoint's fused QKV/MLP layouts are intact.
+                 stream = self._fasth3.apply(stream)
++            if getattr(component, "_adaln_sidecar_candidate", None) is not None:
++                stream = self._verify_adaln_weights(component, stream)
+             loaded = component.load_weights(stream)
+             if prefix == "transformer.":
+                 transformer_loaded = set(loaded)
+             if prefix != "text_encoder.":
+                 component.post_load_weights()
++                self._finish_adaln_sidecar(component)
+             loaded_with_prefix.update(prefix + name for name in loaded)
+         # Both VAEs load eagerly in ``__init__`` rather than through
+         # ``weights_sources``. The text encoder uses the shared component
+@@ -1136,6 +1157,83 @@ class MiniMaxH3Pipeline(
+         """True when --lora-path was consumed as a load-time weight fusion."""
+         return self._fasth3 is not None
+ 
++    def _configure_adaln_sidecar(
++        self,
++        transformer: MiniMaxH3DiTModel,
++        key: str,
++        variant: str,
++        adapter_path: str | Path | None,
++        *,
++        eligible: bool,
++    ) -> None:
++        from safetensors import SafetensorError
++        from vllm.distributed import get_tensor_model_parallel_world_size
++
++        from .adaln_cache import MiniMaxH3AdalnCache, file_digest
++
++        config = self.od_config.cache_config
++        path = config.get(key) if isinstance(config, Mapping) else getattr(config, key, None)
++        if path is None or not transformer.adaln_cache.max_bytes:
++            return
++        try:
++            if not eligible or get_tensor_model_parallel_world_size() != 1:
++                raise ValueError("offline sidecar uses native BF16 TP1 math; use the default runtime cache here")
++            sidecar = MiniMaxH3AdalnCache(transformer.arch, path=path, model_variant=variant)
++            sidecar.bind_adapter(file_digest(adapter_path) if adapter_path is not None else None)
++            # Keep optional CPU-derived data outside the registered model tree.
++            object.__setattr__(transformer, "_adaln_sidecar_candidate", sidecar)
++        except (OSError, RuntimeError, TypeError, ValueError, SafetensorError) as exc:
++            logger.warning("Rejecting optional H3 AdaLN sidecar; runtime caching remains enabled: %s", exc)
++
++    @staticmethod
++    def _verify_adaln_weights(
++        component: MiniMaxH3DiTModel, weights: Iterable[tuple[str, torch.Tensor]]
++    ) -> Iterable[tuple[str, torch.Tensor]]:
++        for name, tensor in weights:
++            candidate = getattr(component, "_adaln_sidecar_candidate", None)
++            if candidate is not None:
++                try:
++                    candidate.verify_weight(name, tensor)
++                except ValueError as exc:
++                    object.__setattr__(component, "_adaln_sidecar_candidate", None)
++                    logger.warning("Rejecting optional H3 AdaLN sidecar: %s", exc)
++            yield name, tensor
++
++    @staticmethod
++    def _finish_adaln_sidecar(component: nn.Module) -> None:
++        from vllm.model_executor.layers.utils import default_unquantized_gemm
++
++        candidate = getattr(component, "_adaln_sidecar_candidate", None)
++        if candidate is None:
++            return
++        try:
++            modules = {
++                f"blocks.{i}.adaln_proj.linear": block.adaln_proj.linear for i, block in enumerate(component.blocks)
++            }
++            modules["final_layer.adaln_proj.linear"] = component.final_layer.adaln_proj.linear
++            for module in (*modules.values(), component.time_embedder.proj_in, component.time_embedder.proj_out):
++                if getattr(module.quant_method, "_gemm_impl", None) is not default_unquantized_gemm:
++                    raise ValueError("offline sidecar requires the builder's torch linear backend")
++            candidate.finish_loading(component.video_patch_proj.weight.device)
++            component.adaln_cache.seed(candidate, modules)
++        except (RuntimeError, ValueError) as exc:
++            logger.warning("Rejecting optional H3 AdaLN sidecar; using runtime projections: %s", exc)
++        finally:
++            object.__setattr__(component, "_adaln_sidecar_candidate", None)
++
++    def _clear_adaln_caches(self) -> None:
++        for name in ("transformer", "transformers_ref"):
++            cache = getattr(getattr(self, name, None), "adaln_cache", None)
++            if cache is not None:
++                cache.clear()
++
++    def _prepare_adaln_adapter(self, sampling: OmniDiffusionSamplingParams) -> None:
++        request = getattr(sampling, "lora_request", None)
++        identity = None if request is None else (request.lora_int_id, request.lora_path, float(sampling.lora_scale))
++        if identity != getattr(self, "_adaln_adapter_identity", None):
++            self._clear_adaln_caches()
++            self._adaln_adapter_identity = identity
++
+     def _transformer_for_task(self, task: str) -> MiniMaxH3DiTModel:
+         if task == "ref2va" and hasattr(self, "transformers_ref"):
+             return self.transformers_ref
+@@ -2422,7 +2520,27 @@ class MiniMaxH3Pipeline(
+         except ValueError as exc:
+             raise OmniClientError(str(exc)) from exc
+ 
++        self._prepare_adaln_adapter(sampling)
+         base_schedule, num_steps = self._resolve_sigma_positions(task, sampling)
++        transformer = getattr(
++            self, "transformers_ref" if task == "ref2va" and hasattr(self, "transformers_ref") else "transformer", None
++        )
++        cache = getattr(transformer, "adaln_cache", None)
++        if cache is not None and cache.sidecar is not None:
++            mode = task
++            if task == "ref2va":
++                mode += "-mixed" if visual_shapes and audio_lengths else "-audio" if audio_lengths else "-image"
++            try:
++                cache.sidecar.check_request(
++                    mode=mode,
++                    num_steps=num_steps,
++                    base_schedule=base_schedule,
++                    flow_shift=float(extra.get("flow_shift", self.default_video_shift)),
++                    audio_flow_shift=float(extra.get("audio_flow_shift", self.default_audio_shift)),
++                )
++            except ValueError as exc:
++                logger.warning("Rejecting optional AdaLN sidecar for this schedule; using runtime cache: %s", exc)
++                cache.clear()
+         quality_plan = self._quality_policy.resolve(
+             quality=sampling.quality,
+             num_inference_steps=num_steps,

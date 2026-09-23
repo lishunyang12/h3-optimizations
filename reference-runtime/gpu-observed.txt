@@ -1,0 +1,12 @@
+# Observed GPU stack. Use the matching CUDA wheel index for torch/torchvision.
+# This file does not replace the vendored vLLM-Omni and FlashInfer sources.
+torch==2.13.0+cu132
+torchvision==0.28.0+cu132
+vllm==0.28.0
+transformers==5.14.1
+diffusers==0.40.0
+flashinfer-python==0.6.16.post3
+nvidia-cutlass-dsl==4.6.2
+comfy-kitchen==0.2.33
+safetensors==0.8.0
+huggingface-hub==1.29.0
