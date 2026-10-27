@@ -26,8 +26,13 @@ The [avatar quality page](https://lishunyang12.github.io/fasth3-lossy-ablation/a
 is a separate 10-second / 243-frame comparison: its 6.993 s result is not the
 5-second performance reference.
 
-For a packaged environment, use the [Docker build and run guide](SM120_DOCKER.md).
-It installs the pinned core dependencies and reconstructs both runtimes.
+The numbered setup steps below describe the **manual host-Python path**.
+For the prebuilt image, follow the [Docker guide](SM120_DOCKER.md) or the
+[PRO 5500 Docker walkthrough](PRO5500.md#docker-image-recommended).
+The image already contains the dependencies and both prepared runtimes; Docker
+users do not repeat the host environment setup, runtime reconstruction or asset
+JSON editing below. Model weights and AdaLN caches still need to be prepared or
+copied from the reference machine.
 
 ## 1. Environment and hardware
 

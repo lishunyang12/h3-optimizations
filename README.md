@@ -32,14 +32,21 @@ explains hardware attribution and timing boundaries.
 | Deliverable | Repository entry |
 |---|---|
 | PRO 5000 reference measurements | [JSON](benchmark/SM120/results.json) · [CSV](benchmark/SM120/timings.csv) · [Explanation](benchmark/SM120/README.md) |
-| PRO 5500 test entry point | [`scripts/run_pro5500.sh`](scripts/run_pro5500.sh) |
+| PRO 5500 test entry point | [Docker walkthrough](docs/PRO5500.md#docker-image-recommended) · [Manual shell launcher](scripts/run_pro5500.sh) |
 | Pinned workload settings | [`configs/sku-cases.json`](configs/sku-cases.json) |
-| Machine-specific asset paths | [`configs/sku-assets.example.json`](configs/sku-assets.example.json) |
+| Machine-specific asset paths | Docker generates these automatically; [example JSON for manual setup](configs/sku-assets.example.json) |
 | Prepare, run and compare | [Target-machine guide](docs/PRO5500.md) · [Full setup](docs/CROSS_SKU_REPRO.md) |
 | Original receipts and checks | [Artifact audit](evidence/sku-evidence-audit.json) · [Package validation](evidence/sku-package-validation.json) |
 
-After preparing the pinned environment, weights and caches using the
-[setup guide](docs/CROSS_SKU_REPRO.md), edit the asset JSON and run both cases:
+With the [prebuilt Docker image](docs/SM120_DOCKER.md#get-the-prebuilt-image), follow
+the [PRO 5500 Docker walkthrough](docs/PRO5500.md#docker-image-recommended). The
+image includes both prepared runtimes and the Python/CUDA environment, and it
+generates asset paths automatically. Prepare weights and caches once, mount them,
+and use the container's `run` command. No host repository clone, runtime
+preparation or manual asset JSON is needed.
+
+For the **manual host-Python setup**, prepare the environment, weights and caches
+using the [setup guide](docs/CROSS_SKU_REPRO.md), then edit the asset JSON:
 
 ```bash
 cp configs/sku-assets.example.json /tmp/h3-assets.json
