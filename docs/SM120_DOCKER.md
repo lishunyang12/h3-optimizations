@@ -86,7 +86,7 @@ byte equality.
 
 ```bash
 docker run --rm --gpus all --pid=host --ipc=host --network=host \
-  --device=/dev/infiniband --ulimit memlock=-1 --cap-add IPC_LOCK \
+  --device=/dev/infiniband --ulimit memlock=-1 --cap-add IPC_LOCK --cap-add SYS_NICE \
   --mount type=bind,src="$PWD/h3-models",dst=/models,readonly \
   --mount type=bind,src="$PWD/h3-results",dst=/results \
   h3-sm120:20261027 run \
@@ -98,7 +98,9 @@ to `/results/pro5500`, keeping the same image, assets and workload. Add `--dry-r
 to preview resolved commands without model execution. The launcher refuses GPUs
 occupied by other jobs; it never stops another service to make space. Host PID
 visibility lets its GPU ownership checks resolve the process IDs reported by
-the NVIDIA driver.
+the NVIDIA driver. `SYS_NICE` permits the recorded 15s launcher's
+`numactl --interleave=all`; Docker's default capability set rejects that NUMA
+policy. The capability was checked with a CPU-only command in the released image.
 
 Copy both result directories onto one machine and run the strict comparator:
 
