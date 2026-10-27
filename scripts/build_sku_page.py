@@ -23,7 +23,7 @@ def main():
   'target_sku_status':'5500 exact hardware and results pending','cases':rows}
  save(assets/'results.json',data)
  with (assets/'timings.csv').open('w',newline='') as f:
-  w=csv.writer(f);w.writerow(['case','gpu_count','gpu','sample','historical_seconds','boundary'])
+  w=csv.writer(f,lineterminator='\n');w.writerow(['case','gpu_count','gpu','sample','historical_seconds','boundary'])
   for r in rows:
    for i,t in enumerate(r['samples_s'],1):w.writerow([r['id'],r['gpu_count'],r['gpu'],i,t,'historical HTTP; see case protocol'])
    for i,t in enumerate(r['historical'].get('ready_samples_s',[]),1):w.writerow([r['id'],r['gpu_count'],r['gpu'],i,t,'avatar application ready, includes checks'])
@@ -49,7 +49,7 @@ def main():
 <article class="card"><span class="pill">15s · 后续输出融合</span><h3>相同工作负载 + 融合</h3><div class="number">13.261 s</div><p class="small">另一轮的 3 次正式请求。该轮基线中位数为 13.334 s，新增输出融合。</p><p class="small">保留对应源码覆盖文件与融合调用审计；不声称这是全部历史中的最快值。</p></article></div>
 <p class="small"><a href="avatar-quality.html">原数字人画质页</a>展示的是独立 10 秒 / 243 帧样本；页面中的 6.993 s 不能作为 5 秒时延。此处 5 秒复现来自保存的 16 次请求序列，排除前 3 次预热。<a href="benchmarks/sku-reproduction/avatar5-history.json">原始时延与媒体校验记录</a>。</p></section>
 <section id="data"><h2>12 个固定配置与逐次数据</h2><p>9 月四步原生路线与 10 月八步 Omni 路线分别列示。所有数字均为历史 RTX PRO 5000 数据；严格跨 SKU 比较需两台机器重新运行同一脚本。</p>
-<div class="controls"><label for="family">显示配置</label><select id="family"><option value="all">全部 12 个</option value="main">5s 数字人与 15s 主配置</option><option value="t2va5">5s / 768p 文生视频</option><option value="omni5">5s / 八步 FastH3-Omni</option></select></div>
+<div class="controls"><label for="family">显示配置</label><select id="family"><option value="all">全部 12 个</option><option value="main">5s 数字人与 15s 主配置</option><option value="t2va5">5s / 768p 文生视频</option><option value="omni5">5s / 八步 FastH3-Omni</option></select></div>
 <div class="table-wrap"><table><thead><tr><th>固定 case</th><th>GPU 数</th><th>输出</th><th>步数</th><th>历史中位数 / s</th><th>正式 n</th><th>5500</th></tr></thead><tbody>__ROWS__</tbody></table></div>
 <div class="controls"><label for="sample-case">查看原始样本</label><select id="sample-case"></select></div><div class="chart"><p id="chart-description" aria-live="polite"></p><svg id="chart" viewBox="0 0 960 220" role="img" aria-label="各次正式请求耗时，虚线为实际视频播放长度"></svg><p class="small">圆点按原始请求顺序排列；虚线是该 case 的实际播放长度。仅 3–13 次样本，不据此推断生产尾延迟。</p></div>
 <p class="small">更早的 5s 原始 FastVideo / PR #5027、PR #5317 对照与同步回归在<a href="five-second.html">五秒性能原页</a>保留；它们有独立运行协议，未合并为本表的新测量。<a href="benchmarks/sku-reproduction/omni5-history-inventory.json">10 月其余已完成实验索引</a>。</p></section>
