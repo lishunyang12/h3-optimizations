@@ -61,6 +61,8 @@ def main():
         'evidence/sku-evidence-audit.json': 'evidence-audit.json',
         'evidence/sku-package-validation.json': 'validation.json',
         'docs/VERIFIED_CONTEXT.md': 'verified-context.md',
+        'evidence/sku-tradeoff-history.json': 'tradeoff-history.json',
+        'benchmark/SM120/tradeoff-timings.csv': 'tradeoff-timings.csv',
     }.items():
         shutil.copy2(ROOT / source, assets / target)
     body = []
@@ -81,6 +83,8 @@ def main():
         'CONTEXT': url + '/blob/' + commit + '/docs/VERIFIED_CONTEXT.md',
         'SOURCE': url + '/blob/' + commit + '/scripts/sku_benchmark.py',
         'CASES': url + '/blob/' + commit + '/configs/sku-cases.json',
+        'TRADEOFFS': url + '/blob/' + commit + '/benchmark/SM120/TRADEOFFS.md',
+        'DOCKER_GUIDE': url + '/blob/' + commit + '/docs/SM120_DOCKER.md',
     }
     doc = (ROOT / 'scripts/sku_report.html').read_text()
     for key, value in replacements.items():
