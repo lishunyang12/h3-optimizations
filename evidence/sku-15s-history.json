@@ -1,0 +1,92 @@
+{
+  "status": "PASS",
+  "tag": "aac-r1",
+  "source_unchanged": true,
+  "timing_valid": true,
+  "e2e_seconds": [
+    13.281,
+    13.304,
+    13.348
+  ],
+  "vae_precision": "NVFP4",
+  "early_gather": true,
+  "dit_raw_byteexact_gates": 800,
+  "vae_modules_per_rank": 144,
+  "requests": [
+    {
+      "label": "warmup-1",
+      "filename": "_warmup-1.mp4",
+      "bytes": 24090764,
+      "sha256": "c9381061816ae7e76349e9a9691cbb445a5db8cfa71bfb6c78eb04cc3d95333d",
+      "baseline_mp4_byteexact": false,
+      "audio_pcm_byteexact": true,
+      "frames": 362,
+      "width": 1280,
+      "height": 704,
+      "accepted_nvfp4_early_gather_byteexact": true,
+      "duration_seconds": 15.083333,
+      "full_decode": "PASS"
+    },
+    {
+      "label": "measured-1",
+      "filename": "out_t2va1-repeat-1.mp4",
+      "bytes": 24089498,
+      "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+      "baseline_mp4_byteexact": false,
+      "audio_pcm_byteexact": true,
+      "frames": 362,
+      "width": 1280,
+      "height": 704,
+      "accepted_nvfp4_early_gather_byteexact": true,
+      "duration_seconds": 15.083333,
+      "full_decode": "PASS"
+    },
+    {
+      "label": "measured-2",
+      "filename": "out_t2va1-repeat-2.mp4",
+      "bytes": 24089498,
+      "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+      "baseline_mp4_byteexact": false,
+      "audio_pcm_byteexact": true,
+      "frames": 362,
+      "width": 1280,
+      "height": 704,
+      "accepted_nvfp4_early_gather_byteexact": true,
+      "duration_seconds": 15.083333,
+      "full_decode": "PASS"
+    },
+    {
+      "label": "measured-3",
+      "filename": "out_t2va1-repeat-3.mp4",
+      "bytes": 24089498,
+      "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+      "baseline_mp4_byteexact": false,
+      "audio_pcm_byteexact": true,
+      "frames": 362,
+      "width": 1280,
+      "height": 704,
+      "accepted_nvfp4_early_gather_byteexact": true,
+      "duration_seconds": 15.083333,
+      "full_decode": "PASS"
+    }
+  ],
+  "outputs_byteexact_to_fastest_baseline": [
+    {
+      "label": "warmup-1",
+      "byteexact": true
+    },
+    {
+      "label": "measured-1",
+      "byteexact": true
+    },
+    {
+      "label": "measured-2",
+      "byteexact": true
+    },
+    {
+      "label": "measured-3",
+      "byteexact": true
+    }
+  ],
+  "scope": "Historical qualification receipt. Byte equality applies to the named accepted quantized parent, not the original BF16 model. Some legacy baseline_mp4_byteexact fields refer to a different baseline."
+}

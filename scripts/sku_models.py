@@ -21,8 +21,8 @@ def main():
     p.add_argument('--adapter', type=Path)
     args = p.parse_args()
     case = get_case(args.case)
-    if case['family'] not in ('legacy15', 'avatar5', 't2va5'):
-        p.error('Use the pinned upstream checkpoint for the separate Omni 8-step cases')
+    if case['family'] not in ('legacy15', 'avatar5'):
+        p.error('This package supports the 5s avatar and 15s FastH3 reference only')
     if args.output.exists():
         p.error('Output must be new; refusing to replace existing assets')
     model = case['model']

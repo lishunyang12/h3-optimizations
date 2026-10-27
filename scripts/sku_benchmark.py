@@ -109,7 +109,7 @@ def get_case(name):
 
 
 def prepare(destination, variant='reference'):
-    """Reconstruct the published 15s runtime; change only the CAKE source location."""
+    """Reconstruct one of the two pinned historical runtimes."""
     destination = Path(destination).resolve()
     if destination.exists():
         raise ValueError('Prepare requires a new directory; refusing to overwrite sources')
@@ -124,7 +124,7 @@ def prepare(destination, variant='reference'):
             raise ValueError(f'Released source differs: {rel}')
     shutil.copytree(ROOT / 'reference-runtime/vllm-omni', destination,
                     ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
-    if variant in ('reference', 'output-fusion'):
+    if variant == 'reference':
         subprocess.run(['git', 'apply', '--check', str(patch)], cwd=destination, check=True)
         subprocess.run(['git', 'apply', str(patch)], cwd=destination, check=True)
     if variant != 'reference':
@@ -197,7 +197,7 @@ def resolve_case(case, assets, out, gpus, port):
 
 
 def gpu_snapshot():
-    fields = ['index', 'uuid', 'name', 'pci.bus_id', 'compute_cap', 'memory.total',
+    fields = ['index', 'uuid', 'name', 'pci.bus_id', 'pci.device_id', 'pci.sub_device_id', 'compute_cap', 'memory.total',
               'memory.used', 'utilization.gpu', 'temperature.gpu', 'power.limit',
               'clocks.sm', 'clocks.mem', 'driver_version']
     raw = command(['nvidia-smi', '--query-gpu=' + ','.join(fields), '--format=csv,noheader,nounits'])
@@ -214,7 +214,10 @@ def select_gpus(snapshot, selection, expected):
         if len(matches) != 1:
             raise ValueError(f'GPU not found or ambiguous: {value}')
         selected += matches
-    if len({g['name'] for g in selected}) != 1:
+    identity_fields = ('name', 'pci.device_id', 'pci.sub_device_id', 'compute_cap', 'memory.total')
+    if any(not g.get(k) or g[k] in ('[N/A]', 'N/A') for g in selected for k in identity_fields):
+        raise ValueError('Incomplete GPU identity; record PCI IDs, architecture and memory before comparing')
+    if len({tuple(g[k] for k in identity_fields) for g in selected}) != 1:
         raise ValueError('Mixed GPU SKUs in one run are not a SKU comparison')
     return selected
 
@@ -370,7 +373,7 @@ def run_case(args):
         raise ValueError('This case needs SM120; port/qualify another architecture before comparing')
     minimum = case['protocol'].get('minimum_memory_mib', 0)
     if any(float(g['memory.total']) < minimum for g in selected):
-        raise ValueError('GPU memory is below the historical requirement; no automatic offload')
+        raise ValueError('GPU memory is below this profile\'s conservative guard; no automatic offload')
     host_memory = int(re.search(r'MemAvailable:\s+(\d+)', Path('/proc/meminfo').read_text()).group(1)) / 2**20
     if host_memory < case['protocol'].get('minimum_host_memory_gib', 0):
         raise ValueError('Insufficient available host RAM for the recorded pinned BF16 weights')
@@ -572,13 +575,13 @@ def compare(left, right):
 def run_suite(args):
     names = args.cases.split(',')
     if names == ['main']:
-        names = ['5s-avatar-ref2va-4step', '15s-4step-mxfp8-sage-nvfp4', '15s-4step-output-fusion']
+        names = ['5s-avatar-ref2va-4step', '15s-4step-mxfp8-sage-nvfp4']
     out = Path(args.output).resolve()
     if out.exists():
         raise ValueError('Suite requires a new output directory')
     cases = [get_case(name) for name in names]
     if any(c['topology']['num_gpus'] != len(args.gpus.split(',')) for c in cases):
-        raise ValueError('Suite GPU count must match every selected case; run the 4-GPU cases separately')
+        raise ValueError('Suite GPU count must match every selected case')
     for name in names:
         item = argparse.Namespace(**vars(args))
         item.case, item.output = name, str(out / name)
@@ -592,7 +595,7 @@ def main():
     sub = p.add_subparsers(dest='action', required=True)
     sub.add_parser('list')
     prep = sub.add_parser('prepare', aliases=['prepare-15s']); prep.add_argument('--output', required=True)
-    prep.add_argument('--variant', choices=['reference', 'output-fusion', 'avatar5', 't2va5'], default='reference')
+    prep.add_argument('--variant', choices=['reference', 'avatar5'], default='reference')
     run = sub.add_parser('run')
     run.add_argument('--case', required=True); run.add_argument('--assets', required=True)
     run.add_argument('--gpus', required=True); run.add_argument('--output', required=True)

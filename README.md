@@ -8,7 +8,9 @@ For the deployed **5s avatar** and **15s FastH3** cross-SKU reproduction, start
 with the [reproduction guide](docs/CROSS_SKU_REPRO.md),
 [pinned cases](configs/sku-cases.json), and
 [public test data](https://lishunyang12.github.io/fasth3-lossy-ablation/sku-reproduction.html).
-The main references used **8 RTX PRO 5000 GPUs**. The new launcher has CPU and
+Both references used **8 GPUs**, described in the historical project records as
+RTX PRO 5000-class Blackwell. See the [verified context](docs/VERIFIED_CONTEXT.md)
+for measurement boundaries and hardware identification limits. The new launcher has CPU and
 historical-log validation; fresh 5000/5500 GPU runs remain pending.
 
 For DGX Spark single-GPU experiments, start with the
@@ -18,9 +20,9 @@ The launcher provides separate baseline, AdaLN, MXFP8 and audio-overlap profiles
 multi-GPU timings are not Spark performance claims; several experimental kernels
 and VAE schedules have explicit architecture or shape restrictions.
 
-中文：这里集中公开 H3 优化源码、定制依赖、分项补丁和测试。Spark 单卡优先试
-AdaLN 缓存，再测试 MXFP8/SwiGLU 和音视频解码重叠；SM120 专用注意力内核需要
-先做 SM121 移植验证。单卡入口关闭多卡通信，不启用 CPU/DLO offload。
+For Spark, test AdaLN caching before MXFP8/SwiGLU and audiovisual decode overlap.
+SM120-specific attention kernels require a separate SM121 port and validation.
+The single-GPU launcher disables multi-GPU communication and CPU/DLO offload.
 
 ## Contents
 
@@ -60,5 +62,5 @@ Apache-2.0 for this project's packaging and optimization contributions, with
 original third-party notices and licenses preserved. See [LICENSE](LICENSE),
 [NOTICE](NOTICE) and [third-party provenance](docs/THIRD_PARTY.md).
 Model weights, generated videos and credentials are not distributed here.
-The two fixed benchmark reference images are included under `repro/inputs/`;
+The fixed avatar benchmark reference image is included under `repro/inputs/`;
 obtain model weights separately under their source terms.

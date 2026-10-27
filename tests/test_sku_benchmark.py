@@ -17,8 +17,6 @@ class ReproductionTests(unittest.TestCase):
         for fixture, name, index in [
             ('15s', '15s-4step-mxfp8-sage-nvfp4', 1),
             ('avatar5', '5s-avatar-ref2va-4step', 0),
-            ('t2va5', '5s-t2va-4step-all-mxfp8', 2),
-            ('t2va5-bf16', '5s-t2va-4step-first-step-bf16', 2),
         ]:
             with self.subTest(case=name):
                 text = (Path(__file__).parent / 'sku-fixtures' / (fixture + '.log')).read_text()
@@ -39,8 +37,8 @@ class ReproductionTests(unittest.TestCase):
                 self.assertNotIn('/lustre/', ' '.join(r['command']))
                 if c.get('reference_asset'):
                     self.assertEqual(b.digest(r['paths']['reference']), c['reference_sha256'])
-        fusion = b.get_case('15s-4step-output-fusion')
-        self.assertEqual(fusion['environment']['VLLM_OMNI_H3_OUTPUT_FUSION'], '1')
+        self.assertEqual(set(b.load(b.CATALOG)['cases']),
+                         {'5s-avatar-ref2va-4step', '15s-4step-mxfp8-sage-nvfp4'})
 
     def test_avatar_preserves_all_original_continuation_requests(self):
         case = b.get_case('5s-avatar-ref2va-4step')
@@ -75,11 +73,17 @@ class ReproductionTests(unittest.TestCase):
                 b.compare(a, other)
 
     def test_gpu_selection_requires_same_sku_and_exact_count(self):
-        cards = [{'index': str(i), 'uuid': f'GPU-{i}', 'name': 'same'} for i in range(8)]
+        cards = [{'index': str(i), 'uuid': f'GPU-{i}', 'name': 'NVIDIA Graphics Device',
+                  'pci.device_id': '0x2BB310DE', 'pci.sub_device_id': '0x227A10DE',
+                  'compute_cap': '12.0', 'memory.total': '73415'} for i in range(8)]
         self.assertEqual(len(b.select_gpus(cards, ','.join(str(i) for i in range(8)), 8)), 8)
         with self.assertRaises(ValueError): b.select_gpus(cards, '0,0', 2)
-        cards[1]['name'] = 'different'
-        with self.assertRaises(ValueError): b.select_gpus(cards, '0,1', 2)
+        for key, value in [('name', 'different'), ('pci.device_id', 'other'),
+                           ('pci.sub_device_id', 'other'), ('memory.total', '32768'),
+                           ('compute_cap', '12.1'), ('pci.device_id', '[N/A]')]:
+            changed = copy.deepcopy(cards); changed[1][key] = value
+            with self.subTest(field=key, value=value), self.assertRaises(ValueError):
+                b.select_gpus(changed, '0,1', 2)
 
 
 if __name__ == '__main__':

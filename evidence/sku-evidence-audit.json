@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "date": "2026-10-27",
+  "scope": "Two selected historical references; original artifacts checked locally, not a fresh GPU run. No claim of exhaustive historical-session review.",
+  "cases": [
+    {
+      "case": "5s-avatar-ref2va-4step",
+      "source_artifact": "short-window-20260922/probe-v4-124/results.json",
+      "source_sha256": "801f94b7f9b41fe805a3e5a5d749abc4d6b42e772f15630cb7fda724cd29b9e9",
+      "sample_field": "http_seconds, warmup=false",
+      "samples_s": [
+        3.5442530040163547,
+        3.5451254488434643,
+        3.545881126075983,
+        3.5540667409077287,
+        3.547505117021501,
+        3.8996319340076298,
+        3.9727099989540875,
+        3.9779565557837486,
+        3.9052701250184327,
+        4.055993593065068,
+        3.582710525020957,
+        3.5897789399605244,
+        3.6023559370078146
+      ],
+      "median_s": 3.5897789399605244,
+      "ready_median_s": 3.7062881940510124,
+      "original_requests_verified": 16,
+      "warmups": 3,
+      "recorded_media_metadata_verified": 16
+    },
+    {
+      "case": "15s-4step-mxfp8-sage-nvfp4",
+      "source_artifact": "experiments/fasth3-fastest-plus-aac-20260918/runs/aac-r1/qualification.json",
+      "source_sha256": "6cb0483691444d2daa57af97b44fe2caf2fe00310d74c169440e4a38d4b78462",
+      "sample_field": "e2e_seconds",
+      "samples_s": [
+        13.281,
+        13.304,
+        13.348
+      ],
+      "median_s": 13.304,
+      "mean_s": 13.311,
+      "warmups": 1,
+      "parent_mp4_equality": "4/4 (one warmup, three measured)",
+      "recorded_media_metadata_verified": 4
+    }
+  ],
+  "hardware_identification": {
+    "project_label": "RTX PRO 5000-class Blackwell",
+    "driver_name_in_some_historical_logs": "NVIDIA Graphics Device",
+    "target_5500_identity_verified": false
+  },
+  "fresh_gpu_runs": false
+}
