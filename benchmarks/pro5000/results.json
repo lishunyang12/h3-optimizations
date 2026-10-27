@@ -39,6 +39,22 @@
         "transport": "BF16 all-RDMA",
         "compute_capability": "12.0"
       },
+      "input": {
+        "image_pixels": [
+          1672,
+          941
+        ],
+        "reference_encoded_pixels": [
+          960,
+          544
+        ],
+        "reference_copies": 2,
+        "external_audio": false,
+        "requested_output_pixels": [
+          960,
+          544
+        ]
+      },
       "warmup_requests": 3,
       "measured_requests": 13,
       "http_samples_s": [
@@ -121,6 +137,14 @@
         "vae_pp": 8,
         "transport": "BF16 all-RDMA",
         "compute_capability": "12.0"
+      },
+      "input": {
+        "image_pixels": null,
+        "external_audio": false,
+        "requested_output_pixels": [
+          1280,
+          720
+        ]
       },
       "warmup_requests": 1,
       "measured_requests": 3,

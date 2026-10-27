@@ -1,0 +1,1864 @@
+{
+  "schema": 1,
+  "status": "historical_evidence_only",
+  "gpu_rerun": false,
+  "groups": [
+    {
+      "id": "avatar-bf16-1088",
+      "family": "avatar5",
+      "date": "2026-09-21",
+      "width": 1088,
+      "height": 608,
+      "frames": 119,
+      "first_frames": 124,
+      "fps": 24,
+      "gpu_count": 8,
+      "steps": 4,
+      "arms": [
+        {
+          "id": "baseline1088",
+          "title": "CPU-staged first-step BF16; MXFP8 later steps",
+          "http_samples_s": [
+            5.699626835994422,
+            5.565663500921801,
+            5.560651031089947,
+            5.568658323958516,
+            5.574161128140986,
+            5.583326325984672,
+            5.593835387844592,
+            5.601095130201429,
+            5.596641381038353
+          ],
+          "source_artifact": "h3-bf16-comparison-20260921-01/baseline1088-results.json",
+          "records": [
+            {
+              "ordinal": 0,
+              "phase": "warmup",
+              "seed": 8300,
+              "http_seconds": 6.302085818024352,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 124,
+              "full_av_decode": true,
+              "sha256": "b684de8f95dc7f418687c2ac6b893dc8423d760d6b83a062e4c118ed501b4aa8",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 1,
+              "phase": "warmup",
+              "seed": 8301,
+              "http_seconds": 5.803552690893412,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "32923919d6b7c2e71261ff60f547d67bfbf047f61b5782a0504a817fe254a32b",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 2,
+              "phase": "warmup",
+              "seed": 8302,
+              "http_seconds": 5.692758170189336,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "5b93120a020c0cad9afee5d886f50a10d69d3ca3cf3117c0d9d63dd9b8aa69ec",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 3,
+              "phase": "formal",
+              "seed": 8303,
+              "http_seconds": 5.699626835994422,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "58d0c6158962b46f70dfa8091cd0f56d3061176fab476a3467f6612b09ffbd4f",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 4,
+              "phase": "formal",
+              "seed": 8304,
+              "http_seconds": 5.565663500921801,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "b44556b76815ef2e67beee3b2a51139a05e536567eec9aa328cc1908414b070b",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 5,
+              "phase": "formal",
+              "seed": 8305,
+              "http_seconds": 5.560651031089947,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "703777e134fce77f289f3f377c764302582b22ec2933438e6048c9c6deec5109",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 6,
+              "phase": "formal",
+              "seed": 8306,
+              "http_seconds": 5.568658323958516,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "d456b79ec570ae3affefcc232067bd88376018e4269a154bdf3635b6fda6c995",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 7,
+              "phase": "formal",
+              "seed": 8307,
+              "http_seconds": 5.574161128140986,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "ec51529934ccfa0739a6e1c5fff6d66dbca782666ab878379820bae3496db27b",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 8,
+              "phase": "formal",
+              "seed": 8308,
+              "http_seconds": 5.583326325984672,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "421cb94b08727eed9edaf23f3080d3ef575d02e288bf8aa7af3b1736d3c7040f",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 9,
+              "phase": "formal",
+              "seed": 8309,
+              "http_seconds": 5.593835387844592,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "e0db3ba6ca3531a226afaa07b6e0c6005856e5f2e9ca805e580debf3dac44e33",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 10,
+              "phase": "formal",
+              "seed": 8310,
+              "http_seconds": 5.601095130201429,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "ac61d74312ef3521efdf71e0e5b44abf3b3fd12a2693cf10171cf2a36ce99b00",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 11,
+              "phase": "formal",
+              "seed": 8311,
+              "http_seconds": 5.596641381038353,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "8f267a326edee77539543ac4b6adedd3b5adb22392c909616ec32bc489193517",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            }
+          ],
+          "warmup_requests": 3,
+          "precision": {
+            "weights": "first_bf16",
+            "attention": "sage_first_bf16"
+          },
+          "memory": {
+            "resident_bf16_weight_bytes_per_rank": 0,
+            "scope": "Weight storage, not total device peak"
+          },
+          "packaged": false,
+          "http_median_s": 5.583326325984672,
+          "measured_requests": 9
+        },
+        {
+          "id": "resident-mixed1088",
+          "title": "GPU-resident BF16 source; first step BF16, later MXFP8",
+          "http_samples_s": [
+            5.829721326939762,
+            5.67631657095626,
+            5.677857475820929,
+            5.687528657028452,
+            5.692827334161848,
+            5.699873198987916,
+            5.722157096024603,
+            5.699592493008822,
+            5.708600863115862
+          ],
+          "source_artifact": "h3-bf16-comparison-20260921-01/resident-results.json",
+          "records": [
+            {
+              "ordinal": 0,
+              "phase": "warmup",
+              "seed": 8300,
+              "http_seconds": 17.77989985095337,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 124,
+              "full_av_decode": true,
+              "sha256": "17b80989db38a00242aef7194f8f30c8719ce7b5ab6f7415555603afe9833dea",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 1,
+              "phase": "warmup",
+              "seed": 8301,
+              "http_seconds": 6.2023791540414095,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "21211f32cf0445250377a24d2171df84b5706fff18d71a08cef604a6413d5a45",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 2,
+              "phase": "warmup",
+              "seed": 8302,
+              "http_seconds": 5.8173346519470215,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "4b8258273dce3f80ca3a1c205bb2264c49d2e8a148a86952aad0fe3884a5605d",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 3,
+              "phase": "formal",
+              "seed": 8303,
+              "http_seconds": 5.829721326939762,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "bdc413acb1d44d1372f47d08c6fed052418d2fcec65a065ef422e3e4130aa190",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 4,
+              "phase": "formal",
+              "seed": 8304,
+              "http_seconds": 5.67631657095626,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "4d7df1e27bb1bcb64b6aa3620847c8541cf389f306a4308c482f5a60db4eb9bf",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 5,
+              "phase": "formal",
+              "seed": 8305,
+              "http_seconds": 5.677857475820929,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "c0cc7e6b45e771d6ec0253c4ed0801a4e174d70dc263ddb5004a2b21c1ae54db",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 6,
+              "phase": "formal",
+              "seed": 8306,
+              "http_seconds": 5.687528657028452,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "77b6c60b1b1d5c163906051941dd06f90e70fdd1aa301a9c9dd0fc34e5fc296d",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 7,
+              "phase": "formal",
+              "seed": 8307,
+              "http_seconds": 5.692827334161848,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "d5e98e8d96f4ecc9fff3ed8027980df33144effef5a198efdfd8e06fd8643bfa",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 8,
+              "phase": "formal",
+              "seed": 8308,
+              "http_seconds": 5.699873198987916,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "6abf7a606d23d669b5f9207b6bf7e1d5a5e1dc1271a860cb6c079ad17e8bab1d",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 9,
+              "phase": "formal",
+              "seed": 8309,
+              "http_seconds": 5.722157096024603,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "eb4c622eaa9aa2bb4d54178765675fb8bdd0e4a3b6634de0ddc5a7e3157caa2f",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 10,
+              "phase": "formal",
+              "seed": 8310,
+              "http_seconds": 5.699592493008822,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "d90fb3bed5ed661cdcb4b6175d500fe0004b7d94bebe5bc86757f9ee2be2a3bd",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 11,
+              "phase": "formal",
+              "seed": 8311,
+              "http_seconds": 5.708600863115862,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "2ceef4f41d708d089979b63edae5404780b9dde05894d4c8a5f8695171da5ffb",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            }
+          ],
+          "warmup_requests": 3,
+          "precision": {
+            "weights": "first_bf16",
+            "attention": "sage_first_bf16"
+          },
+          "memory": {
+            "resident_bf16_weight_bytes_per_rank": 38535168000,
+            "scope": "Weight storage, not total device peak"
+          },
+          "packaged": false,
+          "http_median_s": 5.699592493008822,
+          "measured_requests": 9
+        },
+        {
+          "id": "resident-weights1088",
+          "title": "All-step BF16 projections; first-step BF16 attention",
+          "http_samples_s": [
+            6.561739498050883,
+            6.558718777960166,
+            6.564569144044071,
+            7.127787609118968,
+            6.56818983796984,
+            6.570881885010749,
+            6.570246014045551,
+            7.469617979135364,
+            6.5617796529550105
+          ],
+          "source_artifact": "h3-bf16-comparison-20260921-01/resident-results.json",
+          "records": [
+            {
+              "ordinal": 0,
+              "phase": "warmup",
+              "seed": 8300,
+              "http_seconds": 6.168831611983478,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 124,
+              "full_av_decode": true,
+              "sha256": "88b62d6663e8db60868fac934b2ca3c72846497262c25b27854a9dea28f37811",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 1,
+              "phase": "warmup",
+              "seed": 8301,
+              "http_seconds": 6.561579180881381,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "be36b2ce743629141fdc8087d5e21f2e7d0c41f2b62dfb4eb61aad54fb39270b",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 2,
+              "phase": "warmup",
+              "seed": 8302,
+              "http_seconds": 7.393856195034459,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "4b624f08a43b5c4254176daad249a7d90ce6c094e1f0c1fb798fe3f0fbeccf1f",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 3,
+              "phase": "formal",
+              "seed": 8303,
+              "http_seconds": 6.561739498050883,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "d1ca50f7d885f4a60ae10ce71743daf3565340eca2aff8c888d8ed923dd04a37",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 4,
+              "phase": "formal",
+              "seed": 8304,
+              "http_seconds": 6.558718777960166,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "86fa1a54213399f2d0e7790ea5ccfa6eab367b738219fd125779f667a8c77fa7",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 5,
+              "phase": "formal",
+              "seed": 8305,
+              "http_seconds": 6.564569144044071,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "a2dfae9f2f838bfa042bc8c998bc4f6a2668a40c0f7b7e44a7440b9abdf91b31",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 6,
+              "phase": "formal",
+              "seed": 8306,
+              "http_seconds": 7.127787609118968,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "6cfe893648cbb0e7c79ecb87bed41b61904e2e7607b50c244b26521f3d39606d",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 7,
+              "phase": "formal",
+              "seed": 8307,
+              "http_seconds": 6.56818983796984,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "60f97efa9482ef1e82a677877cf513c67d6db3420d8319c8dae20b4b78226e39",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 8,
+              "phase": "formal",
+              "seed": 8308,
+              "http_seconds": 6.570881885010749,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "d975c67e0a171b99e5ef173b203c15953951b5b6380ac95cc2f1835b4a6f1987",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 9,
+              "phase": "formal",
+              "seed": 8309,
+              "http_seconds": 6.570246014045551,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "b24f9487f2d22718e414eecf1889ca4beb349c53bb8169122959f4a8b95b8d9f",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 10,
+              "phase": "formal",
+              "seed": 8310,
+              "http_seconds": 7.469617979135364,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "b3a7fb4028e9862fd3bdd30a256a06f27a87746b1b7dd833dd0aa0b685b62a87",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 11,
+              "phase": "formal",
+              "seed": 8311,
+              "http_seconds": 6.5617796529550105,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "9e7e6d8844f16f03ffa306e04321184e4dc5917db26773c753354e146bf3c06e",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 12,
+              "phase": "profile",
+              "seed": 8312,
+              "http_seconds": 13.168604938080534,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "f46daa8dde8fcd87839f2763fb1118850e82e8e5e12e81062057c2aa063380f3",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            }
+          ],
+          "warmup_requests": 3,
+          "precision": {
+            "weights": "all_bf16",
+            "attention": "sage_first_bf16"
+          },
+          "memory": {
+            "resident_bf16_weight_bytes_per_rank": 38535168000,
+            "scope": "Weight storage, not total device peak"
+          },
+          "packaged": false,
+          "http_median_s": 6.56818983796984,
+          "measured_requests": 9
+        },
+        {
+          "id": "resident-full1088",
+          "title": "All-step BF16 projections and attention",
+          "http_samples_s": [
+            7.3889501199591905,
+            7.337619811994955,
+            7.336199396988377,
+            7.337085113162175,
+            7.350312628783286,
+            7.343402836006135,
+            7.342036561109126,
+            7.344749282114208,
+            7.354376605013385
+          ],
+          "source_artifact": "h3-bf16-comparison-20260921-01/resident-results.json",
+          "records": [
+            {
+              "ordinal": 0,
+              "phase": "warmup",
+              "seed": 8300,
+              "http_seconds": 6.902645220980048,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 124,
+              "full_av_decode": true,
+              "sha256": "d2299b45bb010716ddc820e3979d37363b3cd49822518617b68548049bc7da0d",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 1,
+              "phase": "warmup",
+              "seed": 8301,
+              "http_seconds": 7.3468862609006464,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "fed00f58cbd60f6f7de726c16b064e71a8e9dd2b33e5d0d4cd2adbc3a0e8e453",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 2,
+              "phase": "warmup",
+              "seed": 8302,
+              "http_seconds": 7.331234639976174,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "ba6eee61ba9dd1892c322ff82b92f806a4e8a94551811934fd5f6b620d2a0949",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 3,
+              "phase": "formal",
+              "seed": 8303,
+              "http_seconds": 7.3889501199591905,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "4f7c53ec20b530edb89f891d1b49e86e2a4e7bcfec632d887be3017342783d88",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 4,
+              "phase": "formal",
+              "seed": 8304,
+              "http_seconds": 7.337619811994955,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "795ed6e507527f4e8cc3b2ea81ed0b6ef9931b425c154627c926c7b9b46f38a8",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 5,
+              "phase": "formal",
+              "seed": 8305,
+              "http_seconds": 7.336199396988377,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "45b1397120ff10a951dc161401896481f45eec911cbba172f36252c5b7f681ba",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 6,
+              "phase": "formal",
+              "seed": 8306,
+              "http_seconds": 7.337085113162175,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "d14a41ca02f7faf7f8a283fabd63cd323f1c262226095d5a9d95b74ac80d03cd",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 7,
+              "phase": "formal",
+              "seed": 8307,
+              "http_seconds": 7.350312628783286,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "6e105d7f69ff9d17c2fd4eb646cf9e86ba322fb7d49a2efd0603c07206881f23",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 8,
+              "phase": "formal",
+              "seed": 8308,
+              "http_seconds": 7.343402836006135,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "31f0415310fdc29efb6da57979e3cc0eb48093c37bdcaa95d9db9b94f9c78878",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 9,
+              "phase": "formal",
+              "seed": 8309,
+              "http_seconds": 7.342036561109126,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "1e60526dc717e2cc5476daaac3f7196ab1aa355f80ceb50c225cc14192a8b7ef",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 10,
+              "phase": "formal",
+              "seed": 8310,
+              "http_seconds": 7.344749282114208,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "58f54122df9ab02e30a333db4542d567078c6bddb18305324e4401e759fee383",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 11,
+              "phase": "formal",
+              "seed": 8311,
+              "http_seconds": 7.354376605013385,
+              "width": 1088,
+              "height": 608,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "e4920e55efd1ad175f84d66c878c692c1971b02521fa73ced05e0581d0ccc319",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            }
+          ],
+          "warmup_requests": 3,
+          "precision": {
+            "weights": "all_bf16",
+            "attention": "all_bf16"
+          },
+          "memory": {
+            "resident_bf16_weight_bytes_per_rank": 38535168000,
+            "scope": "Weight storage, not total device peak"
+          },
+          "packaged": false,
+          "http_median_s": 7.343402836006135,
+          "measured_requests": 9
+        }
+      ],
+      "comparison_scope": "Within this resolution and this recorded rolling trial only. Different reference image and external reference audio from the deployed prompt-only avatar. Each arm generates its own continuation tails.",
+      "quality": "Full audiovisual decode and precision dispatch passed. No accepted perceptual quality score or cross-arm byte equality.",
+      "audit_artifact": "h3-bf16-comparison-20260921-01/comparison.json"
+    },
+    {
+      "id": "avatar-bf16-960",
+      "family": "avatar5",
+      "date": "2026-09-21",
+      "width": 960,
+      "height": 544,
+      "frames": 119,
+      "first_frames": 124,
+      "fps": 24,
+      "gpu_count": 8,
+      "steps": 4,
+      "arms": [
+        {
+          "id": "resident-mixed960",
+          "title": "GPU-resident BF16 source; first step BF16, later MXFP8",
+          "http_samples_s": [
+            4.429140143096447,
+            4.426542628090829,
+            4.423615969019011,
+            4.440035696141422,
+            4.433044649893418,
+            4.438838726142421,
+            4.426763335010037,
+            4.423639727989212,
+            4.421446148073301
+          ],
+          "source_artifact": "h3-bf16-comparison-20260921-01/resident-results.json",
+          "records": [
+            {
+              "ordinal": 0,
+              "phase": "warmup",
+              "seed": 8300,
+              "http_seconds": 4.244131626095623,
+              "width": 960,
+              "height": 544,
+              "video_frames": 124,
+              "full_av_decode": true,
+              "sha256": "7806b4cc7bd731e69890817a0fd77edfe9921ab0eb00d6017b8dd6a3fa9df227",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 1,
+              "phase": "warmup",
+              "seed": 8301,
+              "http_seconds": 4.425609074998647,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "91cc0859bec5775567c160e523c883a4f8f0bd13febc5ed4ba6e52d8055fb881",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 2,
+              "phase": "warmup",
+              "seed": 8302,
+              "http_seconds": 4.430342015111819,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "25995d8632a4eead93a6d2eecb14acf8209d82647f35e9b2d03914feabde7595",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 3,
+              "phase": "formal",
+              "seed": 8303,
+              "http_seconds": 4.429140143096447,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "8eb56131436707bf579fb2ae9dc6a4171822dec2ca063112694d91518c0b8912",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 4,
+              "phase": "formal",
+              "seed": 8304,
+              "http_seconds": 4.426542628090829,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "64b19cce7adbea1d49f64808b287d2e95e0cfa092131be5f6938dbd8e5bedf67",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 5,
+              "phase": "formal",
+              "seed": 8305,
+              "http_seconds": 4.423615969019011,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "4c17d45c41febe798d837768504e07659dc935b342729117e97325fbcc8340bd",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 6,
+              "phase": "formal",
+              "seed": 8306,
+              "http_seconds": 4.440035696141422,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "25a33ea261cd086413b70f4e88f6568eeaf0c8d1f78cceffe419a646fb0a0c54",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 7,
+              "phase": "formal",
+              "seed": 8307,
+              "http_seconds": 4.433044649893418,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "07696231ed8c71e5d7f56dabd6abccfd9a3e586a6c1078578934e0970e1bf4ba",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 8,
+              "phase": "formal",
+              "seed": 8308,
+              "http_seconds": 4.438838726142421,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "407610554bf41b5c7671cfa5b0eeaf66ae650d4d83adc2cae4884d32b4a2fffc",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 9,
+              "phase": "formal",
+              "seed": 8309,
+              "http_seconds": 4.426763335010037,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "893c0bdc0b849175e5b2e0a66ced2bd9f10ecbd6b8b4f04a61e422d49d993ace",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 10,
+              "phase": "formal",
+              "seed": 8310,
+              "http_seconds": 4.423639727989212,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "a3283e8b7c2365f748924dc1d232ba2b93458a3cb62f9cf88290aaca7413cffb",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 11,
+              "phase": "formal",
+              "seed": 8311,
+              "http_seconds": 4.421446148073301,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "18cdda46db9eb352f410e00682ac74debd6ca836bfc807f0a891030b8137613b",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            }
+          ],
+          "warmup_requests": 3,
+          "precision": {
+            "weights": "first_bf16",
+            "attention": "sage_first_bf16"
+          },
+          "memory": {
+            "resident_bf16_weight_bytes_per_rank": 38535168000,
+            "scope": "Weight storage, not total device peak"
+          },
+          "packaged": false,
+          "http_median_s": 4.426763335010037,
+          "measured_requests": 9
+        },
+        {
+          "id": "resident-weights960",
+          "title": "All-step BF16 projections; first-step BF16 attention",
+          "http_samples_s": [
+            5.206900580087677,
+            5.0525687439367175,
+            5.059488554019481,
+            5.054036682937294,
+            5.057883162982762,
+            5.119823505869135,
+            5.059722236823291,
+            5.059950133785605,
+            5.070266579044983
+          ],
+          "source_artifact": "h3-bf16-comparison-20260921-01/resident-results.json",
+          "records": [
+            {
+              "ordinal": 0,
+              "phase": "warmup",
+              "seed": 8300,
+              "http_seconds": 5.2136506049428135,
+              "width": 960,
+              "height": 544,
+              "video_frames": 124,
+              "full_av_decode": true,
+              "sha256": "3fb182f23e66464a820441e52ae426e21be6d91822697acdcd7151e086bdb00c",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 1,
+              "phase": "warmup",
+              "seed": 8301,
+              "http_seconds": 5.376774403033778,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "272c0810c28fb4745ace01af0f609e37bcc9c18803052d508a22965b5a6a968e",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 2,
+              "phase": "warmup",
+              "seed": 8302,
+              "http_seconds": 5.200362175004557,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "dfcea1205fedb838aa6011080f310e58e7e589cf8bb27983c6e0b4652f4868ba",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 3,
+              "phase": "formal",
+              "seed": 8303,
+              "http_seconds": 5.206900580087677,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "3b8b3a35d2cc8d37c3ab1befec40c50df721ef978d5e2d47495a75686b19027d",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 4,
+              "phase": "formal",
+              "seed": 8304,
+              "http_seconds": 5.0525687439367175,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "7ee999a3940dd8ff201ac0f62428e866f3837c46dfa0809f51105f96fa4eeff1",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 5,
+              "phase": "formal",
+              "seed": 8305,
+              "http_seconds": 5.059488554019481,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "a6096d5b9a7aafc6eed3d4ad1fd8b0682e2e12c2e607f7217cf773e89ed771b6",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 6,
+              "phase": "formal",
+              "seed": 8306,
+              "http_seconds": 5.054036682937294,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "d9f273f3e106643357f1b7e89326f06e9a288687d8c7bbe5b5a6db0e16f24d84",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 7,
+              "phase": "formal",
+              "seed": 8307,
+              "http_seconds": 5.057883162982762,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "221588d175d7072a8e9f9048bc54dd8d871322f0e57eec8a9125d71fa3158ec8",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 8,
+              "phase": "formal",
+              "seed": 8308,
+              "http_seconds": 5.119823505869135,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "1e4876f26b37e8ecb5ad3360f957f1cd8b8895f3259e8977b59e2b0308098585",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 9,
+              "phase": "formal",
+              "seed": 8309,
+              "http_seconds": 5.059722236823291,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "9c0b3b93a8b0f8681f7516d6dc9cff244faa95f4b682c3d28b8109c92bf06bf6",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 10,
+              "phase": "formal",
+              "seed": 8310,
+              "http_seconds": 5.059950133785605,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "b988ad1f253031de449bf72cbf3d300f79a1ba1f205aa9c74783b0d86cf24137",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            },
+            {
+              "ordinal": 11,
+              "phase": "formal",
+              "seed": 8311,
+              "http_seconds": 5.070266579044983,
+              "width": 960,
+              "height": 544,
+              "video_frames": 119,
+              "full_av_decode": true,
+              "sha256": "dcf029157ced43e937c9f91e90117085edfc06c53c7681e26e43e4951ce28ff6",
+              "reference_image_sha256": "f6df178309d0c36eaed8f1f9f645c26d40a3ef44ae9d6cde7a9cd0115a0953d7",
+              "reference_audio_sha256": "79b8f4a2012f21d8898ae37dbacd7766bec5661cdae91102269ddcc58903242d"
+            }
+          ],
+          "warmup_requests": 3,
+          "precision": {
+            "weights": "all_bf16",
+            "attention": "sage_first_bf16"
+          },
+          "memory": {
+            "resident_bf16_weight_bytes_per_rank": 38535168000,
+            "scope": "Weight storage, not total device peak"
+          },
+          "packaged": false,
+          "http_median_s": 5.059722236823291,
+          "measured_requests": 9
+        }
+      ],
+      "comparison_scope": "Within this resolution and this recorded rolling trial only. Different reference image and external reference audio from the deployed prompt-only avatar. Each arm generates its own continuation tails.",
+      "quality": "Full audiovisual decode and precision dispatch passed. No accepted perceptual quality score or cross-arm byte equality.",
+      "audit_artifact": "h3-bf16-comparison-20260921-01/comparison.json"
+    },
+    {
+      "id": "avatar-deployed",
+      "family": "avatar5",
+      "date": "2026-09-22",
+      "width": 960,
+      "height": 544,
+      "frames": 119,
+      "first_frames": 124,
+      "fps": 24,
+      "gpu_count": 8,
+      "steps": 4,
+      "arms": [
+        {
+          "id": "deployed-avatar",
+          "title": "Selected deployed avatar: MXFP8 + dense Sage",
+          "http_samples_s": [
+            3.5442530040163547,
+            3.5451254488434643,
+            3.545881126075983,
+            3.5540667409077287,
+            3.547505117021501,
+            3.8996319340076298,
+            3.9727099989540875,
+            3.9779565557837486,
+            3.9052701250184327,
+            4.055993593065068,
+            3.582710525020957,
+            3.5897789399605244,
+            3.6023559370078146
+          ],
+          "source_artifact": "h3-optimizations/evidence/sku-avatar5-history.json",
+          "warmup_requests": 3,
+          "packaged": true,
+          "memory": {
+            "peak_gpu_mib": null,
+            "scope": "No matched per-arm peak VRAM receipt in this export"
+          },
+          "http_median_s": 3.5897789399605244,
+          "measured_requests": 13
+        }
+      ],
+      "comparison_scope": "Selected reference only. Do not divide this latency into the earlier BF16 trial to claim a matched speedup.",
+      "quality": "Three-frame application screening is not identity, anatomy or lip-sync verification."
+    },
+    {
+      "id": "fasth3-precision",
+      "family": "legacy15",
+      "date": "2026-09-18",
+      "width": 1280,
+      "height": 704,
+      "frames": 362,
+      "fps": 24,
+      "gpu_count": 8,
+      "steps": 4,
+      "arms": [
+        {
+          "id": "baseline-r1",
+          "title": "All-step MXFP8 + Sage",
+          "http_samples_s": [
+            13.506,
+            13.545,
+            13.576
+          ],
+          "source_artifact": "minimax-h3-native/experiments/fasth3-precision-schedule-realtime-20260918/runs/baseline-r1/qualification.json",
+          "warmup_requests": 1,
+          "records": [
+            {
+              "label": "warmup-1",
+              "filename": "_warmup-1.mp4",
+              "bytes": 24090764,
+              "sha256": "c9381061816ae7e76349e9a9691cbb445a5db8cfa71bfb6c78eb04cc3d95333d",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-1",
+              "filename": "out_t2va1-repeat-1.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-2",
+              "filename": "out_t2va1-repeat-2.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-3",
+              "filename": "out_t2va1-repeat-3.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            }
+          ],
+          "precision_arm": "all_mxfp8",
+          "memory": {
+            "measured_gpu_peak_mib": null,
+            "scope": "Not exported without a uniform per-arm telemetry receipt"
+          },
+          "packaged": false,
+          "http_median_s": 13.545,
+          "measured_requests": 3
+        },
+        {
+          "id": "first-step-bf16-r2",
+          "title": "First step BF16 DiT + BF16 VSA; later MXFP8 + Sage",
+          "http_samples_s": [
+            15.215,
+            15.255,
+            15.337
+          ],
+          "source_artifact": "minimax-h3-native/experiments/fasth3-precision-schedule-realtime-20260918/runs/first-step-bf16-r2/qualification.json",
+          "warmup_requests": 1,
+          "records": [
+            {
+              "label": "warmup-1",
+              "filename": "_warmup-1.mp4",
+              "bytes": 24780697,
+              "sha256": "4b972802fff2626a443e54cc284f9541951ddeee84a28d0817f81b3482fc7869",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": false,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": false,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-1",
+              "filename": "out_t2va1-repeat-1.mp4",
+              "bytes": 24779653,
+              "sha256": "fec676b410849d8f1f229e670a271a6e509af4d86c861776b0b187c416ac62a2",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": false,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": false,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-2",
+              "filename": "out_t2va1-repeat-2.mp4",
+              "bytes": 24779653,
+              "sha256": "fec676b410849d8f1f229e670a271a6e509af4d86c861776b0b187c416ac62a2",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": false,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": false,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-3",
+              "filename": "out_t2va1-repeat-3.mp4",
+              "bytes": 24779653,
+              "sha256": "fec676b410849d8f1f229e670a271a6e509af4d86c861776b0b187c416ac62a2",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": false,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": false,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            }
+          ],
+          "precision_arm": "first_step_bf16",
+          "memory": {
+            "resident_bf16_blocks": 24,
+            "host_bf16_blocks": 26,
+            "host_bf16_bytes_per_rank": 20038287360,
+            "staging": "two GPU buffers",
+            "host_transfer_included_in_e2e": true,
+            "measured_gpu_peak_mib": 71849
+          },
+          "packaged": false,
+          "http_median_s": 15.255,
+          "measured_requests": 3
+        },
+        {
+          "id": "o-only-bf16-r2",
+          "title": "BF16 output projections; other projections MXFP8 + Sage",
+          "http_samples_s": [
+            13.859,
+            13.934,
+            13.965
+          ],
+          "source_artifact": "minimax-h3-native/experiments/fasth3-precision-schedule-realtime-20260918/runs/o-only-bf16-r2/qualification.json",
+          "warmup_requests": 1,
+          "records": [
+            {
+              "label": "warmup-1",
+              "filename": "_warmup-1.mp4",
+              "bytes": 25249804,
+              "sha256": "5669c9278d3f13da173c7eb77016ef0a4bb9499e96ea958215211b82cc8dacfd",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": false,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": false,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-1",
+              "filename": "out_t2va1-repeat-1.mp4",
+              "bytes": 25249541,
+              "sha256": "7af4d17a040828611a9acbeb0e67abbfb726c8ae36fbae54844aaafaa3d74c84",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": false,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": false,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-2",
+              "filename": "out_t2va1-repeat-2.mp4",
+              "bytes": 25249541,
+              "sha256": "7af4d17a040828611a9acbeb0e67abbfb726c8ae36fbae54844aaafaa3d74c84",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": false,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": false,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-3",
+              "filename": "out_t2va1-repeat-3.mp4",
+              "bytes": 25249541,
+              "sha256": "7af4d17a040828611a9acbeb0e67abbfb726c8ae36fbae54844aaafaa3d74c84",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": false,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": false,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            }
+          ],
+          "precision_arm": "o_only_bf16",
+          "memory": {
+            "measured_gpu_peak_mib": null,
+            "scope": "Not exported without a uniform per-arm telemetry receipt"
+          },
+          "packaged": false,
+          "http_median_s": 13.934,
+          "measured_requests": 3
+        }
+      ],
+      "comparison_scope": "Same prompt, seed 1101, shapes and NVFP4 VAE; compare precision schedules within this trial.",
+      "quality": "Each arm repeats its own measured MP4 bytes. BF16 protection changes outputs; no accepted perceptual quality ranking.",
+      "audit_artifact": "minimax-h3-native/experiments/fasth3-precision-schedule-realtime-20260918/validated-summary.json"
+    },
+    {
+      "id": "fasth3-aac",
+      "family": "legacy15",
+      "date": "2026-09-18",
+      "width": 1280,
+      "height": 704,
+      "frames": 362,
+      "fps": 24,
+      "gpu_count": 8,
+      "steps": 4,
+      "arms": [
+        {
+          "id": "baseline-r1",
+          "title": "Contemporary all-MXFP8 parent",
+          "http_samples_s": [
+            13.507,
+            13.551,
+            13.578
+          ],
+          "source_artifact": "minimax-h3-native/experiments/fasth3-fastest-plus-aac-20260918/runs/baseline-r1/qualification.json",
+          "warmup_requests": 1,
+          "records": [
+            {
+              "label": "warmup-1",
+              "filename": "_warmup-1.mp4",
+              "bytes": 24090764,
+              "sha256": "c9381061816ae7e76349e9a9691cbb445a5db8cfa71bfb6c78eb04cc3d95333d",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-1",
+              "filename": "out_t2va1-repeat-1.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-2",
+              "filename": "out_t2va1-repeat-2.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-3",
+              "filename": "out_t2va1-repeat-3.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            }
+          ],
+          "outputs_byteexact_to_accepted_parent": true,
+          "packaged": false,
+          "memory": {
+            "peak_gpu_mib": null,
+            "scope": "No comparable per-arm peak value in qualification receipt"
+          },
+          "http_median_s": 13.551,
+          "measured_requests": 3
+        },
+        {
+          "id": "aac-r1",
+          "title": "Cached output normalization + early AAC (selected reference)",
+          "http_samples_s": [
+            13.281,
+            13.304,
+            13.348
+          ],
+          "source_artifact": "minimax-h3-native/experiments/fasth3-fastest-plus-aac-20260918/runs/aac-r1/qualification.json",
+          "warmup_requests": 1,
+          "records": [
+            {
+              "label": "warmup-1",
+              "filename": "_warmup-1.mp4",
+              "bytes": 24090764,
+              "sha256": "c9381061816ae7e76349e9a9691cbb445a5db8cfa71bfb6c78eb04cc3d95333d",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-1",
+              "filename": "out_t2va1-repeat-1.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-2",
+              "filename": "out_t2va1-repeat-2.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-3",
+              "filename": "out_t2va1-repeat-3.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            }
+          ],
+          "outputs_byteexact_to_accepted_parent": true,
+          "packaged": true,
+          "memory": {
+            "peak_gpu_mib": null,
+            "scope": "No comparable per-arm peak value in qualification receipt"
+          },
+          "http_median_s": 13.304,
+          "measured_requests": 3
+        }
+      ],
+      "comparison_scope": "Matched contemporary parent/candidate test. The earlier 13.545 s precision baseline belongs to a separate round.",
+      "quality": "All four MP4s per arm match the accepted quantized parent; full decode passed. Not equality to original BF16 inference."
+    },
+    {
+      "id": "fasth3-output-fusion",
+      "family": "legacy15",
+      "date": "2026-09-18",
+      "width": 1280,
+      "height": 704,
+      "frames": 362,
+      "fps": 24,
+      "gpu_count": 8,
+      "steps": 4,
+      "arms": [
+        {
+          "id": "baseline",
+          "title": "Contemporary parent",
+          "http_samples_s": [
+            13.303,
+            13.334,
+            13.362
+          ],
+          "source_artifact": "minimax-h3-native/experiments/fasth3-dit-comm-review-20260918/gpu-campaign-results.json",
+          "warmup_requests": 1,
+          "records": [
+            {
+              "label": "warmup-1",
+              "filename": "_warmup-1.mp4",
+              "bytes": 24090764,
+              "sha256": "c9381061816ae7e76349e9a9691cbb445a5db8cfa71bfb6c78eb04cc3d95333d",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-1",
+              "filename": "out_t2va1-repeat-1.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-2",
+              "filename": "out_t2va1-repeat-2.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-3",
+              "filename": "out_t2va1-repeat-3.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            }
+          ],
+          "outputs_byteexact_to_accepted_parent": true,
+          "packaged": false,
+          "memory": {
+            "peak_gpu_mib": null
+          },
+          "http_median_s": 13.334,
+          "measured_requests": 3
+        },
+        {
+          "id": "output_fused",
+          "title": "Fused output conversion",
+          "http_samples_s": [
+            13.212,
+            13.261,
+            13.336
+          ],
+          "source_artifact": "minimax-h3-native/experiments/fasth3-dit-comm-review-20260918/gpu-campaign-results.json",
+          "warmup_requests": 1,
+          "records": [
+            {
+              "label": "warmup-1",
+              "filename": "_warmup-1.mp4",
+              "bytes": 24090764,
+              "sha256": "c9381061816ae7e76349e9a9691cbb445a5db8cfa71bfb6c78eb04cc3d95333d",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-1",
+              "filename": "out_t2va1-repeat-1.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-2",
+              "filename": "out_t2va1-repeat-2.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            },
+            {
+              "label": "measured-3",
+              "filename": "out_t2va1-repeat-3.mp4",
+              "bytes": 24089498,
+              "sha256": "061b79b418dbae623ede09a203f4b0f83fb231f6f7ab381d50cb310ea7865fab",
+              "baseline_mp4_byteexact": false,
+              "audio_pcm_byteexact": true,
+              "frames": 362,
+              "width": 1280,
+              "height": 704,
+              "accepted_nvfp4_early_gather_byteexact": true,
+              "duration_seconds": 15.083333,
+              "full_decode": "PASS"
+            }
+          ],
+          "outputs_byteexact_to_accepted_parent": true,
+          "packaged": false,
+          "memory": {
+            "peak_gpu_mib": null
+          },
+          "http_median_s": 13.261,
+          "measured_requests": 3
+        }
+      ],
+      "comparison_scope": "Separate later matched test. Historical evidence only; not an additional packaged benchmark case.",
+      "quality": "All four MP4s per arm match the contemporary parent. Full decode passed."
+    }
+  ],
+  "original_sources": [
+    {
+      "artifact": "h3-bf16-comparison-20260921-01/resident-results.json",
+      "sha256": "d638ff55043ae3f775f6b7196337c844774c665c33e068c98d093426b348e8da",
+      "bytes": 44034
+    },
+    {
+      "artifact": "h3-bf16-comparison-20260921-01/baseline1088-results.json",
+      "sha256": "919ca2768690dde16db82e0e2628412beaf15e895516544529c070cfa50d8db6",
+      "bytes": 8547
+    },
+    {
+      "artifact": "h3-bf16-comparison-20260921-01/comparison.json",
+      "sha256": "7e9b873f7414204b90cf7adf2d490f0e92a49208005c2d81389dae4f593dc566",
+      "bytes": 5815
+    },
+    {
+      "artifact": "h3-optimizations/evidence/sku-avatar5-history.json",
+      "sha256": "31bd3c22359f1d48f6e23c3b314d863c1d917ddc294062653058a2f200329fdf",
+      "bytes": 6520
+    },
+    {
+      "artifact": "minimax-h3-native/experiments/fasth3-precision-schedule-realtime-20260918/validated-summary.json",
+      "sha256": "3eb78c926b67df80463e86e227a02b6638c2eefd4832843ea59a3edfbdfe5c46",
+      "bytes": 2317
+    },
+    {
+      "artifact": "minimax-h3-native/experiments/fasth3-precision-schedule-realtime-20260918/runs/baseline-r1/qualification.json",
+      "sha256": "c839563590faf3fad9c8028de76224d73b330f6b7142666af361676956cbc1ba",
+      "bytes": 2630
+    },
+    {
+      "artifact": "minimax-h3-native/experiments/fasth3-precision-schedule-realtime-20260918/runs/first-step-bf16-r2/qualification.json",
+      "sha256": "928b7c8987449e62e0804bcb4a42d4a262d63ede84ba7c6aefbc1a68fa791ea9",
+      "bytes": 2691
+    },
+    {
+      "artifact": "minimax-h3-native/experiments/fasth3-precision-schedule-realtime-20260918/runs/o-only-bf16-r2/qualification.json",
+      "sha256": "0d544c8c9c53790c8f08a73f2f801d3d353fa0b3ef0000cb01e05cba5dbfa1df",
+      "bytes": 2678
+    },
+    {
+      "artifact": "minimax-h3-native/experiments/fasth3-fastest-plus-aac-20260918/runs/baseline-r1/qualification.json",
+      "sha256": "ee3f16fc6503941370fcf0883ed266d96855500e03dac93d58cfa30cf3a089e0",
+      "bytes": 2941
+    },
+    {
+      "artifact": "minimax-h3-native/experiments/fasth3-fastest-plus-aac-20260918/runs/aac-r1/qualification.json",
+      "sha256": "6cb0483691444d2daa57af97b44fe2caf2fe00310d74c169440e4a38d4b78462",
+      "bytes": 2931
+    },
+    {
+      "artifact": "minimax-h3-native/experiments/fasth3-dit-comm-review-20260918/gpu-campaign-results.json",
+      "sha256": "71e8150f76dd54d32907f2e6005a961863b6a38347616383e1afcc1c608e7d24",
+      "bytes": 13233
+    }
+  ],
+  "exclusions": [
+    "Initial probe-124 failed in the application controller; its partial timings are not a successful benchmark.",
+    "The 10s avatar quality page is not a 5s performance case.",
+    "No cross-round speedup or monetary price is inferred."
+  ],
+  "checkpoint_note": "Intermediate precision modes reuse the base and adapter weights. No independently trained or downloadable intermediate checkpoint is established by these receipts."
+}

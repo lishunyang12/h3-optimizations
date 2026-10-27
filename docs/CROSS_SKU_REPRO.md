@@ -1,6 +1,6 @@
 # Reproduce the deployed 5s avatar and the 15s FastH3 reference
 
-[PRO 5000 data](../benchmarks/pro5000/README.md) · [PRO 5500 launcher guide](PRO5500.md) ·
+[PRO 5000 data](../benchmark/SM120/README.md) · [PRO 5500 launcher guide](PRO5500.md) ·
 [Public data and downloads](https://lishunyang12.github.io/fasth3-lossy-ablation/sku-reproduction.html) · [Verified context](VERIFIED_CONTEXT.md)
 
 This package contains **two benchmark cases**. Its configuration, preparation and
@@ -26,6 +26,9 @@ The [avatar quality page](https://lishunyang12.github.io/fasth3-lossy-ablation/a
 is a separate 10-second / 243-frame comparison: its 6.993 s result is not the
 5-second performance reference.
 
+For a packaged environment, use the [Docker build and run guide](SM120_DOCKER.md).
+It installs the pinned core dependencies and reconstructs both runtimes.
+
 ## 1. Environment and hardware
 
 Each case requires **8 idle GPUs of the same SKU and SM120 architecture**, with
@@ -35,6 +38,9 @@ driver, clocks, power limit, CPU and GPU interconnect topology. It rejects
 incomplete or inconsistent GPU identities within one run. Some historical logs
 report only `NVIDIA Graphics Device`; the RTX PRO 5000 designation comes from
 project hardware records. The exact hardware meant by "5500" remains unverified.
+
+Without an RDMA-capable NIC/path, these two profiles cannot run as released.
+A no-NIC NCCL/P2P variant needs separate qualification.
 
 The launcher does not reduce resolution, change precision or enable offload to
 fit a different card. The 15s historical summary reports 63099 MiB of peak device

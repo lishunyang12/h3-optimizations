@@ -54,6 +54,10 @@ def render():
             'measurement_date': history.get('date', history.get('measured_date')),
             'gpu_count': case['topology']['num_gpus'], 'steps': 4,
             'media': case['media'], 'topology': case['topology'],
+            'input': ({'image_pixels': [1672, 941], 'reference_encoded_pixels': [960, 544],
+                       'reference_copies': 2, 'external_audio': False, 'requested_output_pixels': [960, 544]}
+                      if name == CASES[0] else
+                      {'image_pixels': None, 'external_audio': False, 'requested_output_pixels': [1280, 720]}),
             'warmup_requests': case['protocol']['warmups'], 'measured_requests': len(samples),
             'http_samples_s': samples, 'http_median_s': median,
             'http_mean_s': statistics.mean(samples),
@@ -85,20 +89,25 @@ def render():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output', type=Path, default=ROOT / 'benchmarks/pro5000')
+    parser.add_argument('--output', type=Path, default=ROOT / 'benchmark/SM120')
     parser.add_argument('--check', action='store_true', help='Verify existing exports without writing')
     args = parser.parse_args()
     contents = render()
+    targets = [args.output]
+    if args.output == ROOT / 'benchmark/SM120':
+        targets.append(ROOT / 'benchmarks/pro5000')
     if args.check:
-        for name, expected in contents.items():
-            path = args.output / name
-            if not path.is_file() or path.read_text() != expected:
-                raise SystemExit(f'Stale export: {path}; regenerate from the checked receipts')
+        for target in targets:
+            for name, expected in contents.items():
+                path = target / name
+                if not path.is_file() or path.read_text() != expected:
+                    raise SystemExit(f'Stale export: {path}; regenerate from the checked receipts')
         print('PRO 5000 JSON/CSV match both historical receipts and the artifact audit')
     else:
-        args.output.mkdir(parents=True, exist_ok=True)
-        for name, text in contents.items():
-            (args.output / name).write_text(text)
+        for target in targets:
+            target.mkdir(parents=True, exist_ok=True)
+            for name, text in contents.items():
+                (target / name).write_text(text)
         print(f'Exported two historical references to {args.output}')
 
 

@@ -4,8 +4,10 @@ H3 / FastH3 inference optimizations collected in one repository: **AdaLN reuse,
 MXFP8 projections and SwiGLU fusion, Sage/VSA attention, VAE kernels and scheduling,
 audio/video output overlap, and Ulysses/RDMA communication**.
 
-[PRO 5000 data](benchmarks/pro5000/README.md) ·
+[PRO 5000 data](benchmark/SM120/README.md) ·
 [Run on PRO 5500](docs/PRO5500.md) ·
+[Docker setup](docs/SM120_DOCKER.md) ·
+[Intermediate stages](benchmark/SM120/TRADEOFFS.md) ·
 [Setup](docs/CROSS_SKU_REPRO.md) ·
 [Validation](docs/VERIFIED_CONTEXT.md)
 
@@ -29,7 +31,7 @@ explains hardware attribution and timing boundaries.
 
 | Deliverable | Repository entry |
 |---|---|
-| PRO 5000 reference measurements | [JSON](benchmarks/pro5000/results.json) · [CSV](benchmarks/pro5000/timings.csv) · [Explanation](benchmarks/pro5000/README.md) |
+| PRO 5000 reference measurements | [JSON](benchmark/SM120/results.json) · [CSV](benchmark/SM120/timings.csv) · [Explanation](benchmark/SM120/README.md) |
 | PRO 5500 test entry point | [`scripts/run_pro5500.sh`](scripts/run_pro5500.sh) |
 | Pinned workload settings | [`configs/sku-cases.json`](configs/sku-cases.json) |
 | Machine-specific asset paths | [`configs/sku-assets.example.json`](configs/sku-assets.example.json) |
@@ -82,7 +84,7 @@ The single-GPU launcher disables multi-GPU communication and CPU/DLO offload.
 | [`fastvideo-kernel/`](fastvideo-kernel) | Optional FastVideo sparse-attention kernel sources |
 | [`reference-runtime/`](reference-runtime/README.md) | Full experimental runtime, additional kernels and original microbenchmarks |
 | [`patches/`](patches/README.md) | Individual AdaLN/MXFP8/Sage/VAE/RDMA diffs and full-length runtime variant |
-| [`benchmarks/pro5000/`](benchmarks/pro5000) | Historical 5s avatar and 15s FastH3 samples, statistics and receipt provenance |
+| [`benchmark/SM120/`](benchmark/SM120) | Historical 5s avatar and 15s FastH3 samples, statistics and receipt provenance |
 | [`scripts/`](scripts) | PRO 5500 handoff, shared cross-SKU harness, data export and source preparation |
 | [`configs/sources.json`](configs/sources.json) | Upstream identities, exact port revisions and snapshot provenance |
 
