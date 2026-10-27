@@ -1,5 +1,6 @@
 # Reproduce the deployed 5s avatar and the 15s FastH3 reference
 
+[PRO 5000 data](../benchmarks/pro5000/README.md) · [PRO 5500 launcher guide](PRO5500.md) ·
 [Public data and downloads](https://lishunyang12.github.io/fasth3-lossy-ablation/sku-reproduction.html) · [Verified context](VERIFIED_CONTEXT.md)
 
 This package contains **two benchmark cases**. Its configuration, preparation and

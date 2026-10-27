@@ -1,0 +1,154 @@
+{
+  "schema": 1,
+  "status": "historical_reference_only",
+  "hardware": {
+    "project_label": "RTX PRO 5000-class Blackwell",
+    "driver_name_in_some_historical_logs": "NVIDIA Graphics Device",
+    "target_5500_identity_verified": false
+  },
+  "timing": "Historical HTTP request through completed MP4; warmup excluded from medians. Avatar application-ready time is separate.",
+  "comparison": "Run the same new launcher on both systems before claiming a strict cross-SKU speedup.",
+  "target_pro5500": {
+    "hardware_verified": false,
+    "measurements": null
+  },
+  "cases": [
+    {
+      "case": "5s-avatar-ref2va-4step",
+      "status": "historical_measurement",
+      "measurement_date": "2026-09-22",
+      "gpu_count": 8,
+      "steps": 4,
+      "media": {
+        "width": 960,
+        "height": 544,
+        "frames": 119,
+        "fps": "24/1",
+        "video_codec": "h264",
+        "audio_codec": "aac",
+        "sample_rate": 32000,
+        "channels": 2,
+        "duration_seconds": 4.958333333333333
+      },
+      "topology": {
+        "num_gpus": 8,
+        "tp": 1,
+        "sp": 8,
+        "text_encoder_tp": 8,
+        "vae_pp": 8,
+        "transport": "BF16 all-RDMA",
+        "compute_capability": "12.0"
+      },
+      "warmup_requests": 3,
+      "measured_requests": 13,
+      "http_samples_s": [
+        3.5442530040163547,
+        3.5451254488434643,
+        3.545881126075983,
+        3.5540667409077287,
+        3.547505117021501,
+        3.8996319340076298,
+        3.9727099989540875,
+        3.9779565557837486,
+        3.9052701250184327,
+        4.055993593065068,
+        3.582710525020957,
+        3.5897789399605244,
+        3.6023559370078146
+      ],
+      "http_median_s": 3.5897789399605244,
+      "http_mean_s": 3.71717223428333,
+      "model": {
+        "base_repo": "MiniMaxAI/MiniMax-H3",
+        "base_revision": "73372e6cf53e414edd3ab03e357717fb0602e758",
+        "partition": "Ref2VA",
+        "adapter_repo": "lightx2v/Minimax-h3-Turbo",
+        "adapter_revision": "3ec17a324ced54151364f24f8b5fb6bf7e26414f",
+        "adapter_file": "minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors",
+        "adapter_sha256": "9e642fc8749c74f8da5e2382877ab5c7aa37b9a73b7fd0d6d457bd1b3cb1ae99",
+        "model_index_sha256": "15477c22a5021179b36439c27e63672c5c5b29e5f4bc11bd50e011c91ae9e973",
+        "transformer_config_sha256": "f619093a231fcfbcc3d035bec26c50ad864e7331a500d5c519f5045dc1e50458"
+      },
+      "runtime_variant": "avatar5",
+      "reproduction_case_identity": "be9f4f3f2eb66e65cd3173a3f4a73b7588a799361b30fa85d31d806d183fae5c",
+      "receipt": "evidence/sku-avatar5-history.json",
+      "receipt_sha256": "31bd3c22359f1d48f6e23c3b314d863c1d917ddc294062653058a2f200329fdf",
+      "original_artifact": "short-window-20260922/probe-v4-124/results.json",
+      "original_artifact_sha256": "801f94b7f9b41fe805a3e5a5d749abc4d6b42e772f15630cb7fda724cd29b9e9",
+      "first_output_frames": 124,
+      "application_ready_samples_s": [
+        3.665281177032739,
+        3.661568744108081,
+        3.6619727469515055,
+        3.669778869021684,
+        3.6664876979775727,
+        4.028935521142557,
+        4.093477816786617,
+        4.096392116043717,
+        4.029596529901028,
+        4.177112315082923,
+        3.6981664272025228,
+        3.7062881940510124,
+        3.719565568957478
+      ],
+      "application_ready_median_s": 3.7062881940510124,
+      "fixed_requests": "repro/avatar5-requests.json",
+      "fixed_requests_sha256": "86b90328a6d2c116f3d2e41226f9d0060eab349f04c55f67e3a5a9b6e69a3da6",
+      "reference_image_sha256": "41f1f15af74b88d9b11117bc73b0af560f9128aeb32c0093f0b92e019e826376"
+    },
+    {
+      "case": "15s-4step-mxfp8-sage-nvfp4",
+      "status": "historical_measurement",
+      "measurement_date": "2026-09-18",
+      "gpu_count": 8,
+      "steps": 4,
+      "media": {
+        "width": 1280,
+        "height": 704,
+        "frames": 362,
+        "fps": "24/1",
+        "video_codec": "h264",
+        "audio_codec": "aac",
+        "sample_rate": 32000,
+        "channels": 2,
+        "duration_seconds": 15.083333333333334
+      },
+      "topology": {
+        "num_gpus": 8,
+        "tp": 1,
+        "sp": 8,
+        "text_encoder_tp": 8,
+        "vae_pp": 8,
+        "transport": "BF16 all-RDMA",
+        "compute_capability": "12.0"
+      },
+      "warmup_requests": 1,
+      "measured_requests": 3,
+      "http_samples_s": [
+        13.281,
+        13.304,
+        13.348
+      ],
+      "http_median_s": 13.304,
+      "http_mean_s": 13.311,
+      "model": {
+        "base_repository": "MiniMaxAI/MiniMax-H3",
+        "base_revision": "9bfb6693f2cf6de171db46d1aa586f67d773a1da",
+        "partition": "FL2VA",
+        "student_repository": "FastVideo/FastVideo-FastH3-4-step-v1",
+        "student_revision": "b790390377918066c5f5902ec6cc96e21a55926e",
+        "adapter_sha256": "42dc502a2078f166c396a1fa75f29728d1844363652d345d5ef3e2b444ed6470",
+        "adapter_bytes": 5339117712,
+        "adapter_repository": "FastVideo/FastVideo-FastH3-4-step-Preview-v1-LoRA",
+        "adapter_revision": "c0e8ec2ac460e801094a0abe74bfb57347388ce3",
+        "adapter_file": "vsa-datafree/adapter_model.safetensors"
+      },
+      "runtime_variant": "reference",
+      "reproduction_case_identity": "c5c48c20191ae82c6b18f702c78b0e371d25ff7b6a1695126348f768d7259d0b",
+      "receipt": "evidence/sku-15s-history.json",
+      "receipt_sha256": "f6c061657a84a774abdd88cf5017165533806abe81c4dd7cdee83a79fa96e4c7",
+      "original_artifact": "experiments/fasth3-fastest-plus-aac-20260918/runs/aac-r1/qualification.json",
+      "original_artifact_sha256": "6cb0483691444d2daa57af97b44fe2caf2fe00310d74c169440e4a38d4b78462"
+    }
+  ]
+}

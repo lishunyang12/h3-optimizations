@@ -4,14 +4,63 @@ H3 / FastH3 inference optimizations collected in one repository: **AdaLN reuse,
 MXFP8 projections and SwiGLU fusion, Sage/VSA attention, VAE kernels and scheduling,
 audio/video output overlap, and Ulysses/RDMA communication**.
 
-For the deployed **5s avatar** and **15s FastH3** cross-SKU reproduction, start
-with the [reproduction guide](docs/CROSS_SKU_REPRO.md),
-[pinned cases](configs/sku-cases.json), and
-[public test data](https://lishunyang12.github.io/fasth3-lossy-ablation/sku-reproduction.html).
-Both references used **8 GPUs**, described in the historical project records as
-RTX PRO 5000-class Blackwell. See the [verified context](docs/VERIFIED_CONTEXT.md)
-for measurement boundaries and hardware identification limits. The new launcher has CPU and
-historical-log validation; fresh 5000/5500 GPU runs remain pending.
+[PRO 5000 data](benchmarks/pro5000/README.md) ·
+[Run on PRO 5500](docs/PRO5500.md) ·
+[Setup](docs/CROSS_SKU_REPRO.md) ·
+[Validation](docs/VERIFIED_CONTEXT.md)
+
+## PRO 5000 measurements and PRO 5500 reproduction
+
+The reproduction handoff covers **the deployed 5s avatar and the 15s FastH3
+reference**. Both historical runs used eight GPUs, described in project records
+as RTX PRO 5000-class Blackwell. Individual samples, model pins and provenance
+are included in this repository.
+
+| Workload | GPUs | Output at 24 fps | Steps | Historical HTTP median | Formal samples | PRO 5500 |
+|---|---:|---|---:|---:|---:|---|
+| Deployed 5s avatar | 8 | 960×544, 119 frames per continuation | 4 | **3.589779 s** | 13 | Pending |
+| 15s FastH3 reference | 8 | 1280×704, 362 frames / 15.083333 s | 4 | **13.304 s** | 3 | Pending |
+
+Avatar windows contain 124 frames with 5-frame overlap; the initial warmup output
+has 124 frames. The table uses HTTP latency, not application-ready or playback
+latency. Warmups are excluded. Some historical driver records report the generic
+name `NVIDIA Graphics Device`; the [verified context](docs/VERIFIED_CONTEXT.md)
+explains hardware attribution and timing boundaries.
+
+| Deliverable | Repository entry |
+|---|---|
+| PRO 5000 reference measurements | [JSON](benchmarks/pro5000/results.json) · [CSV](benchmarks/pro5000/timings.csv) · [Explanation](benchmarks/pro5000/README.md) |
+| PRO 5500 test entry point | [`scripts/run_pro5500.sh`](scripts/run_pro5500.sh) |
+| Pinned workload settings | [`configs/sku-cases.json`](configs/sku-cases.json) |
+| Machine-specific asset paths | [`configs/sku-assets.example.json`](configs/sku-assets.example.json) |
+| Prepare, run and compare | [Target-machine guide](docs/PRO5500.md) · [Full setup](docs/CROSS_SKU_REPRO.md) |
+| Original receipts and checks | [Artifact audit](evidence/sku-evidence-audit.json) · [Package validation](evidence/sku-package-validation.json) |
+
+After preparing the pinned environment, weights and caches using the
+[setup guide](docs/CROSS_SKU_REPRO.md), edit the asset JSON and run both cases:
+
+```bash
+cp configs/sku-assets.example.json /tmp/h3-assets.json
+# Fill in the prepared runtime, interpreter, model, adapter, AdaLN and CUDA paths.
+bash scripts/run_pro5500.sh \
+  --assets /tmp/h3-assets.json --gpus 0,1,2,3,4,5,6,7 \
+  --output /results/pro5500
+```
+
+Add `--dry-run` to preview without accessing GPUs. The target must satisfy the
+8-GPU SM120, memory and RDMA requirements in the guide. The exact target hardware
+and its results remain unverified. CPU and packaging validation have passed;
+**fresh GPU runs of this launcher are pending on both systems**. Run the same
+revision on PRO 5000 and PRO 5500 for a strict comparison.
+
+The presentation follows [Sana SOL Engine](https://github.com/NVlabs/Sana/tree/sol-engine)
+and [PR #511](https://github.com/NVlabs/Sana/pull/511): retained measurements,
+fixed recipes, execution commands and validation scope. The runtime and
+measurements here come from this repository's historical H3 experiments.
+The [public data page](https://lishunyang12.github.io/fasth3-lossy-ablation/sku-reproduction.html)
+also shows the two historical references.
+
+## Other optimization experiments
 
 For DGX Spark single-GPU experiments, start with the
 [Spark guide](docs/DGX_SPARK.md) and [optimization map](docs/OPTIMIZATIONS.md).
@@ -33,14 +82,15 @@ The single-GPU launcher disables multi-GPU communication and CPU/DLO offload.
 | [`fastvideo-kernel/`](fastvideo-kernel) | Optional FastVideo sparse-attention kernel sources |
 | [`reference-runtime/`](reference-runtime/README.md) | Full experimental runtime, additional kernels and original microbenchmarks |
 | [`patches/`](patches/README.md) | Individual AdaLN/MXFP8/Sage/VAE/RDMA diffs and full-length runtime variant |
-| [`scripts/`](scripts) | Source verification, environment report, Spark launcher and HTTP benchmark |
+| [`benchmarks/pro5000/`](benchmarks/pro5000) | Historical 5s avatar and 15s FastH3 samples, statistics and receipt provenance |
+| [`scripts/`](scripts) | PRO 5500 handoff, shared cross-SKU harness, data export and source preparation |
 | [`configs/sources.json`](configs/sources.json) | Upstream identities, exact port revisions and snapshot provenance |
 
 The portable ports are already integrated in `vllm-omni/`; do not apply their
 patches again. Experimental runtime code is retained separately because it has
 additional features and different APIs. Do not mix modules from the two runtimes.
 
-## Quick start
+## DGX Spark quick start
 
 ```bash
 git clone https://github.com/lishunyang12/h3-optimizations.git
