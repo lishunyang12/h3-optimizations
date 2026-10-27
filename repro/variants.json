@@ -1,0 +1,61 @@
+{
+  "avatar5": {
+    "overlay": "repro/avatar5-overlay",
+    "files": {
+      "vllm_omni/diffusion/models/minimax_h3/cached_output_normalize.py": "5e57e45f095d5f884231051afc1760c32afa6725fe24f3bd89c8a4330c904e02",
+      "vllm_omni/diffusion/models/minimax_h3/denoise_loop.py": "f8edbbf174cff323c89cfcc9c0b89e7efb9cff273170ff661bf2d319b44f8143",
+      "vllm_omni/diffusion/models/minimax_h3/early_audio_encode.py": "ccd6be760be740bf87427bb232cc120d6028be20eae3b40f02fe1815f10dd106",
+      "vllm_omni/diffusion/models/minimax_h3/exact_reference_cache.py": "499abe408a3894be9794222936bee0a96c1d0f335ad2e100dc0a66f30854d997",
+      "vllm_omni/diffusion/models/minimax_h3/mxfp8_experiment.py": "fb21ab3cf57806b58bf532d22b17d0fb3a77f13b0366c825578fce56e298d525",
+      "vllm_omni/diffusion/models/minimax_h3/paired_vae.py": "cdc7ca14eee991802cd51841079519928c70eea6eeb16e22fdb623d9433297af",
+      "vllm_omni/diffusion/models/minimax_h3/pipeline_minimax_h3.py": "4047e189d3003c2f58631f7293effce6e17fdc08f0fedde6ed23ba9cfe43b716",
+      "vllm_omni/diffusion/models/minimax_h3/quality_guide_noise.py": "b2ec584c5ed1342f11ff1bfe0cffa4a14ef205368325b94df41628e630b7e76d",
+      "vllm_omni/diffusion/models/minimax_h3/quality_pcm.py": "d3b864ad721576c52da244ae729b811d57d37544dd945aa6a63ae2a06f6de4fb",
+      "vllm_omni/diffusion/models/minimax_h3/quality_tail_replay.py": "c41ebfdc6d9f4df269765eb5898e52fdf30984b70c5b8a9cc79a8a7b6968fa36",
+      "vllm_omni/diffusion/models/minimax_h3/quality_target_prefix.py": "76a8b815047fca5f49112d05e6e2df1329ea225b47f1ab78c0aadb451ca5fa8c",
+      "vllm_omni/diffusion/models/minimax_h3/ref2va_bf16_weights.py": "877bedae317639ae94bf8667f33f0c9a6fe9ff0eb1d657e7b3e74ee7fb9e3106",
+      "vllm_omni/diffusion/models/minimax_h3/ref2va_mxfp8.py": "49324ed23bb6e9f8d5d9353777bba8d48a122d20df5b23c815453afe3cd5ee19",
+      "vllm_omni/diffusion/models/minimax_h3/ref2va_precision.py": "3876b333bbe42a523e322a81e71902ba15d1ac268e1b5bb93e6f9a9f1c4d2b6e",
+      "vllm_omni/diffusion/models/minimax_h3/rolling_continuation.py": "1e390a1d9bb705ee833839fd2f6405967b29be33392ee2e38296a014d6fe8d80",
+      "vllm_omni/diffusion/models/minimax_h3/short_window_experiment.py": "7f671f6bf799eb4f8c30cb9aef7f1d932df130590f8dd1118dddc1e84e475676",
+      "vllm_omni/diffusion/models/minimax_h3/vae.py": "a1196664168b033c3d45567c08eba91b647431b132e1801aa858a30fb5408172"
+    },
+    "provenance": "native-v3"
+  },
+  "t2va5": {
+    "overlay": "repro/t2va5-overlay",
+    "files": {
+      "vllm_omni/diffusion/attention/backends/cudnn_attn.py": "1801dd351c1a776151d6a2e4add0defa47d740da14ef3ff942efc1262ca1e046",
+      "vllm_omni/diffusion/attention/backends/fastvideo_vsa.py": "37204d4a3204b55d444ec8ceea9185b728efaad9205e101562749312cb58f7a7",
+      "vllm_omni/diffusion/attention/ops/h3_cake_grid_constant.py": "ad2e95854e226de1bbe01ad08a71a0310903e9a3afe01cac8deb3b84370c4c41",
+      "vllm_omni/diffusion/attention/ops/h3_o_producer_lookahead.py": "6011c2a55da344bbefa86b6b0d9b3c4813f290de1a985015eb983442bdd18424",
+      "vllm_omni/diffusion/attention/ops/h3_overlap_chunks.py": "af9c03f4f346cecc4bdca56ddd94c10305a4fb186b259b16579f53d2e783c0c9",
+      "vllm_omni/diffusion/attention/ops/h3_overlap_experiment.py": "8ab338c906189104847b6ea034f66192a2caf641fe9e0d0d2854ab4b9f978bf9",
+      "vllm_omni/diffusion/attention/ops/h3_schedule_v3.py": "5edb29518619aefce018a64edad453397284828e8f8cbdc71d7196d674bd6bb7",
+      "vllm_omni/diffusion/attention/ops/h3_tiled_o_producer.py": "e4a48df7351019729779c37e3f17bca8ea8fd6bf40b227a8664304cdaa9e206e",
+      "vllm_omni/diffusion/attention/ops/h3_vsplit_experiment.py": "3a14e714267427018c3df1f14adc84f1839898aca9c7ef2d2c358e164dcf893e",
+      "vllm_omni/diffusion/models/minimax_h3/cached_output_normalize.py": "5e57e45f095d5f884231051afc1760c32afa6725fe24f3bd89c8a4330c904e02",
+      "vllm_omni/diffusion/models/minimax_h3/chunked_cpu_output.py": "e1a36cc465f7d4c7fa7c642a27fb322c391ad2844a571837a73b1280565b15b0",
+      "vllm_omni/diffusion/models/minimax_h3/early_audio_encode.py": "5d947a40a98c3b4ca0a5d5da03226469e7f504e1bc192636f1bacd60d84a39fe",
+      "vllm_omni/diffusion/models/minimax_h3/minimax_h3_transformer.py": "6add092ea339b3191c5cb116bdb61950d1bc8f90cc90f4c71dc5b8b49d3c22b0",
+      "vllm_omni/diffusion/models/minimax_h3/mxfp8_experiment.py": "0d67b573d5c29642f0f9d4ad9b45bbdd8c2f6a175d95e4c6fa327454503bb10a",
+      "vllm_omni/diffusion/models/minimax_h3/packed_sequence.py": "41d8354fdd8fbc8ccb84f271a3a18b61e7ae8883c2938422cc3be2e6f5576e26",
+      "vllm_omni/diffusion/models/minimax_h3/paired_vae.py": "cdc7ca14eee991802cd51841079519928c70eea6eeb16e22fdb623d9433297af",
+      "vllm_omni/diffusion/models/minimax_h3/pipeline_minimax_h3.py": "a9b749e57f2f1ee704113859e10ae04b5610aa42583ae8ed8bf42d8cb9ac01d6",
+      "vllm_omni/diffusion/models/minimax_h3/precision_schedule.py": "cb304ff8cca9c22e851413ba0ff567b53043d3f90dc93c20bf984928c8e6cfc6",
+      "vllm_omni/diffusion/models/minimax_h3/short_window_experiment.py": "7f671f6bf799eb4f8c30cb9aef7f1d932df130590f8dd1118dddc1e84e475676",
+      "vllm_omni/diffusion/models/minimax_h3/vae.py": "508391a157344650de1fb181f7c4730d2168172a5969ad7a5f9878acdb16b2c2"
+    },
+    "provenance": "native"
+  },
+  "output-fusion": {
+    "overlay": "repro/15s-output-fusion-overlay",
+    "files": {
+      "vllm_omni/diffusion/models/minimax_h3/output_fusion_kernels.py": "5e9a4c972b0ee53af3afe7b4b28aec071cae9ae08bea0d819d366a6643fd3c1a",
+      "vllm_omni/diffusion/models/minimax_h3/output_fusion.py": "e69fa95c18449b64c0ababb5aef164227ee8ea8ad3b565addefaac129350e56d",
+      "vllm_omni/diffusion/models/minimax_h3/cached_output_normalize.py": "9787760e8341fa8ecbdd4bc508947e7005490c7837ce4e42432a0b99ea8a5511",
+      "vllm_omni/diffusion/models/minimax_h3/chunked_cpu_output.py": "e1a36cc465f7d4c7fa7c642a27fb322c391ad2844a571837a73b1280565b15b0"
+    },
+    "provenance": "fasth3-output-fusion-live-20260918/native-fused"
+  }
+}

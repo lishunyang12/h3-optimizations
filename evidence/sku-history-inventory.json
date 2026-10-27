@@ -1,0 +1,304 @@
+{
+  "scope": "Located completed 5s checkpoint/provider runs; legacy 15s references are separately pinned in configs. Not a claim that every historical experiment is portable.",
+  "records": [
+    {
+      "artifact": "cake-checkpoints-20261022-B/manifest.json",
+      "workload": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 8,
+        "seed": 1234,
+        "prompt": "A family enjoys dinner together around a wooden table. Steam rises from the ramen bowls. They smile and talk naturally. The camera slowly pushes toward the table. Warm indoor lighting, quiet conversation, soft clinking of dishes."
+      },
+      "provider": "fi-cake",
+      "model": "FastH3-Omni-NVFP4-QAD",
+      "decoder": "original",
+      "revision": "c67204da85acd701a4b85c105843e287205800ec",
+      "median": {
+        "e2e_ms": 28992.401,
+        "dit_ms": 23459.07594077289,
+        "video_vae_ms": 4196.206073276699,
+        "server_inference_ms": 28951.0
+      },
+      "measured_requests": 3
+    },
+    {
+      "artifact": "results/C/manifest.json",
+      "workload": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 8,
+        "seed": 1234,
+        "prompt": "A family enjoys dinner together around a wooden table. Steam rises from the ramen bowls. They smile and talk naturally. The camera slowly pushes toward the table. Warm indoor lighting, quiet conversation, soft clinking of dishes."
+      },
+      "provider": null,
+      "model": "FastH3-Omni-NVFP4-QAD",
+      "decoder": "nvfp4-fast-8L",
+      "revision": "c67204da85acd701a4b85c105843e287205800ec",
+      "median": {
+        "e2e_ms": 28175.902000000002,
+        "dit_ms": 26293.452040292323,
+        "video_vae_ms": 612.485399004072,
+        "server_inference_ms": 28135.0
+      },
+      "measured_requests": 3
+    },
+    {
+      "artifact": "results/BF16/manifest.json",
+      "workload": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 8,
+        "seed": 1234,
+        "prompt": "A family enjoys dinner together around a wooden table. Steam rises from the ramen bowls. They smile and talk naturally. The camera slowly pushes toward the table. Warm indoor lighting, quiet conversation, soft clinking of dishes."
+      },
+      "provider": null,
+      "model": "FastVideo-FastH3-Omni-8-Step-V1",
+      "decoder": "original",
+      "revision": "c67204da85acd701a4b85c105843e287205800ec",
+      "median": {
+        "e2e_ms": 52545.642,
+        "dit_ms": 46951.64818782359,
+        "video_vae_ms": 4218.974943738431,
+        "server_inference_ms": 52505.0
+      },
+      "measured_requests": 3
+    },
+    {
+      "artifact": "results/B/manifest.json",
+      "workload": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 8,
+        "seed": 1234,
+        "prompt": "A family enjoys dinner together around a wooden table. Steam rises from the ramen bowls. They smile and talk naturally. The camera slowly pushes toward the table. Warm indoor lighting, quiet conversation, soft clinking of dishes."
+      },
+      "provider": null,
+      "model": "FastH3-Omni-NVFP4-QAD",
+      "decoder": "original",
+      "revision": "c67204da85acd701a4b85c105843e287205800ec",
+      "median": {
+        "e2e_ms": 31820.587,
+        "dit_ms": 26303.42222796753,
+        "video_vae_ms": 4223.155701998621,
+        "server_inference_ms": 31778.0
+      },
+      "measured_requests": 3
+    },
+    {
+      "artifact": "cake-checkpoints-20261022-BF16/manifest.json",
+      "workload": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 8,
+        "seed": 1234,
+        "prompt": "A family enjoys dinner together around a wooden table. Steam rises from the ramen bowls. They smile and talk naturally. The camera slowly pushes toward the table. Warm indoor lighting, quiet conversation, soft clinking of dishes."
+      },
+      "provider": "fi-cake",
+      "model": "FastVideo-FastH3-Omni-8-Step-V1",
+      "decoder": "original",
+      "revision": "c67204da85acd701a4b85c105843e287205800ec",
+      "median": {
+        "e2e_ms": 49535.933,
+        "dit_ms": 43957.01969321817,
+        "video_vae_ms": 4214.679261203855,
+        "server_inference_ms": 49493.0
+      },
+      "measured_requests": 3
+    },
+    {
+      "artifact": "bf16-fastvideo/manifest.json",
+      "workload": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 8,
+        "seed": 1234,
+        "prompt": "A family enjoys dinner together around a wooden table. Steam rises from the ramen bowls. They smile and talk naturally. The camera slowly pushes toward the table. Warm indoor lighting, quiet conversation, soft clinking of dishes."
+      },
+      "provider": "triton",
+      "model": "FastVideo-FastH3-Omni-8-Step-V1",
+      "decoder": "original",
+      "revision": "c67204da85acd701a4b85c105843e287205800ec",
+      "median": {
+        "e2e_ms": 60635.797,
+        "dit_ms": 54996.16072513163,
+        "video_vae_ms": 4213.374361861497,
+        "server_inference_ms": 60594.0
+      },
+      "measured_requests": 3
+    },
+    {
+      "artifact": "cake-checkpoints-20261022-D/manifest.json",
+      "workload": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 8,
+        "seed": 1234,
+        "prompt": "A family enjoys dinner together around a wooden table. Steam rises from the ramen bowls. They smile and talk naturally. The camera slowly pushes toward the table. Warm indoor lighting, quiet conversation, soft clinking of dishes."
+      },
+      "provider": "fi-cake",
+      "model": "FastH3-Omni-NVFP4-QAD",
+      "decoder": "nvfp4-quality-36L",
+      "revision": "c67204da85acd701a4b85c105843e287205800ec",
+      "median": {
+        "e2e_ms": 27011.192000000003,
+        "dit_ms": 23470.31110106036,
+        "video_vae_ms": 2256.207979284227,
+        "server_inference_ms": 26969.0
+      },
+      "measured_requests": 3
+    },
+    {
+      "artifact": "checkpoint-cudnn/A/manifest.json",
+      "workload": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 8,
+        "seed": 1234,
+        "prompt": "A family enjoys dinner together around a wooden table. Steam rises from the ramen bowls. They smile and talk naturally. The camera slowly pushes toward the table. Warm indoor lighting, quiet conversation, soft clinking of dishes."
+      },
+      "provider": "cudnn",
+      "model": "FastH3-Omni-FP8",
+      "decoder": "original",
+      "revision": "c67204da85acd701a4b85c105843e287205800ec",
+      "median": {
+        "e2e_ms": 35717.774,
+        "dit_ms": 30260.527125094086,
+        "video_vae_ms": 4213.086886331439,
+        "server_inference_ms": 35677.0
+      },
+      "measured_requests": 3
+    },
+    {
+      "artifact": "checkpoint-cudnn/C/manifest.json",
+      "workload": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 8,
+        "seed": 1234,
+        "prompt": "A family enjoys dinner together around a wooden table. Steam rises from the ramen bowls. They smile and talk naturally. The camera slowly pushes toward the table. Warm indoor lighting, quiet conversation, soft clinking of dishes."
+      },
+      "provider": "cudnn",
+      "model": "FastH3-Omni-NVFP4-QAD",
+      "decoder": "nvfp4-fast-8L",
+      "revision": "c67204da85acd701a4b85c105843e287205800ec",
+      "median": {
+        "e2e_ms": 28287.497,
+        "dit_ms": 26384.088310878724,
+        "video_vae_ms": 618.3490483090281,
+        "server_inference_ms": 28247.0
+      },
+      "measured_requests": 3
+    },
+    {
+      "artifact": "checkpoint-cudnn/B/manifest.json",
+      "workload": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 8,
+        "seed": 1234,
+        "prompt": "A family enjoys dinner together around a wooden table. Steam rises from the ramen bowls. They smile and talk naturally. The camera slowly pushes toward the table. Warm indoor lighting, quiet conversation, soft clinking of dishes."
+      },
+      "provider": "cudnn",
+      "model": "FastH3-Omni-NVFP4-QAD",
+      "decoder": "original",
+      "revision": "c67204da85acd701a4b85c105843e287205800ec",
+      "median": {
+        "e2e_ms": 31803.127,
+        "dit_ms": 26362.869733944535,
+        "video_vae_ms": 4198.568219318986,
+        "server_inference_ms": 31762.0
+      },
+      "measured_requests": 3
+    },
+    {
+      "artifact": "cake-checkpoints-20261022-C/manifest.json",
+      "workload": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 8,
+        "seed": 1234,
+        "prompt": "A family enjoys dinner together around a wooden table. Steam rises from the ramen bowls. They smile and talk naturally. The camera slowly pushes toward the table. Warm indoor lighting, quiet conversation, soft clinking of dishes."
+      },
+      "provider": "fi-cake",
+      "model": "FastH3-Omni-NVFP4-QAD",
+      "decoder": "nvfp4-fast-8L",
+      "revision": "c67204da85acd701a4b85c105843e287205800ec",
+      "median": {
+        "e2e_ms": 25361.146999999997,
+        "dit_ms": 23461.592447943985,
+        "video_vae_ms": 612.8248278982937,
+        "server_inference_ms": 25320.0
+      },
+      "measured_requests": 3
+    },
+    {
+      "artifact": "original-fi-cake/manifest.json",
+      "workload": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 8,
+        "seed": 1234,
+        "prompt": "A family enjoys dinner together around a wooden table. Steam rises from the ramen bowls. They smile and talk naturally. The camera slowly pushes toward the table. Warm indoor lighting, quiet conversation, soft clinking of dishes."
+      },
+      "provider": "fi-cake",
+      "model": "FastVideo-FastH3-Omni-8-Step-V1",
+      "decoder": "original",
+      "revision": "c67204da85acd701a4b85c105843e287205800ec",
+      "median": {
+        "e2e_ms": 49741.328,
+        "dit_ms": 44090.741944964975,
+        "video_vae_ms": 4213.252093177289,
+        "server_inference_ms": 49697.0
+      },
+      "measured_requests": 3
+    },
+    {
+      "artifact": "bf16-cudnn/manifest.json",
+      "workload": {
+        "width": 1344,
+        "height": 768,
+        "frames": 124,
+        "fps": 24,
+        "steps": 8,
+        "seed": 1234,
+        "prompt": "A family enjoys dinner together around a wooden table. Steam rises from the ramen bowls. They smile and talk naturally. The camera slowly pushes toward the table. Warm indoor lighting, quiet conversation, soft clinking of dishes."
+      },
+      "provider": "cudnn",
+      "model": "FastVideo-FastH3-Omni-8-Step-V1",
+      "decoder": "original",
+      "revision": "c67204da85acd701a4b85c105843e287205800ec",
+      "median": {
+        "e2e_ms": 52573.709,
+        "dit_ms": 46963.59926182777,
+        "video_vae_ms": 4210.760368965566,
+        "server_inference_ms": 52532.0
+      },
+      "measured_requests": 3
+    }
+  ]
+}

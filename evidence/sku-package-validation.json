@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "date": "2026-10-27",
+  "cpu_tests": {
+    "command": "python3 -m unittest discover -s tests -p test_sku_benchmark.py -v",
+    "passed": 6
+  },
+  "dry_run_profiles": 12,
+  "source_reconstruction": [
+    {
+      "variant": "avatar5",
+      "python_source_matches_history": true,
+      "only_relocation": null,
+      "sha256": "ecf42e34f338424d293f47abdf4f94b6d489ae15844afebea5db371ea389407f"
+    },
+    {
+      "variant": "reference",
+      "python_source_matches_history": true,
+      "only_relocation": "bundled CAKE source location",
+      "sha256": "50fc22a95708e5b8670f6b79700c1d8b323d85cae444c3ddc6d3ccb2672f71de"
+    },
+    {
+      "variant": "output-fusion",
+      "python_source_matches_history": true,
+      "only_relocation": "bundled CAKE source location",
+      "sha256": "4a4c5a0c41cd33b1823ada983f26140f9e1cb35062716d8a45f16cb6dde6b514"
+    },
+    {
+      "variant": "t2va5",
+      "python_source_matches_history": true,
+      "only_relocation": "bundled CAKE source location",
+      "sha256": "86ffafaea2576a502cca87c3b34d6c61b1c0e1524f2b5c70bb3602eccf29463f"
+    }
+  ],
+  "overlay_python_syntax_files": 41,
+  "original_dispatch_receipts": [
+    "15s full NVFP4",
+    "5s avatar",
+    "5s T2VA MXFP8",
+    "5s T2VA first-step BF16"
+  ],
+  "local_http_test": {
+    "status": "PASS",
+    "double_reference_multipart": true,
+    "full_mp4_bytes": true,
+    "full_audio_video_decode": true
+  },
+  "gpu_rerun": false,
+  "target_5500_result": null,
+  "scope": "Validates packaging and historical receipts; does not establish fresh GPU execution or performance."
+}

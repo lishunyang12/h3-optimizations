@@ -1,0 +1,207 @@
+{
+  "schema": 1,
+  "description": {
+    "source": "probe-v4-124 / short-window-20260922",
+    "date": "2026-09-22",
+    "gpu_count": 8,
+    "gpu": "NVIDIA RTX PRO 5000 Blackwell",
+    "http_samples_s": [
+      3.5442530040163547,
+      3.5451254488434643,
+      3.545881126075983,
+      3.5540667409077287,
+      3.547505117021501,
+      3.8996319340076298,
+      3.9727099989540875,
+      3.9779565557837486,
+      3.9052701250184327,
+      4.055993593065068,
+      3.582710525020957,
+      3.5897789399605244,
+      3.6023559370078146
+    ],
+    "http_median_s": 3.5897789399605244,
+    "ready_samples_s": [
+      3.665281177032739,
+      3.661568744108081,
+      3.6619727469515055,
+      3.669778869021684,
+      3.6664876979775727,
+      4.028935521142557,
+      4.093477816786617,
+      4.096392116043717,
+      4.029596529901028,
+      4.177112315082923,
+      3.6981664272025228,
+      3.7062881940510124,
+      3.719565568957478
+    ],
+    "ready_median_s": 3.7062881940510124,
+    "scope": "HTTP includes inference and complete MP4. Historical ready_seconds additionally includes application media/seam screening. Replay measures HTTP only; no Twitch/chat pipeline.",
+    "new_harness_rerun_required_for_strict_comparison": true,
+    "quality_page": "https://lishunyang12.github.io/fasth3-lossy-ablation/avatar-quality.html",
+    "quality_page_duration_note": "This page shows a separate 10s/243-frame quality comparison, not the 5s latency measurement."
+  },
+  "records": [
+    {
+      "ordinal": 0,
+      "phase": "warmup",
+      "http_seconds": 3.9655029529239982,
+      "ready_seconds": 4.12205924699083,
+      "frames": 124,
+      "media_seconds": 5.166666666666667,
+      "sha256": "a0a5cfa6a3b6d72dfb41fdb39dbe9fdcee2ab66478b62b927674a863991b3d8a",
+      "action": "rest"
+    },
+    {
+      "ordinal": 1,
+      "phase": "warmup",
+      "http_seconds": 3.957478916971013,
+      "ready_seconds": 4.075688830111176,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "85f679d0ab841a38becdf694428bad1b91dd8a9e7270e1a93937abd1690876a0",
+      "action": "rest"
+    },
+    {
+      "ordinal": 2,
+      "phase": "warmup",
+      "http_seconds": 3.5490841479040682,
+      "ready_seconds": 3.668491831049323,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "4a957911599ac674bf53a37807a5d35b2514365fd1741f36db014193d7121b24",
+      "action": "rest"
+    },
+    {
+      "ordinal": 3,
+      "phase": "measured",
+      "http_seconds": 3.5442530040163547,
+      "ready_seconds": 3.665281177032739,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "939586a5ad2802d41ab2c3a8a6d748e3838e1d34599399e5d0ec17600e8343a3",
+      "action": "rest"
+    },
+    {
+      "ordinal": 4,
+      "phase": "measured",
+      "http_seconds": 3.5451254488434643,
+      "ready_seconds": 3.661568744108081,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "0d10ceefa09488fe4abe90ebdea6b72b4710a328872203fc389e94a88bb737c9",
+      "action": "rest"
+    },
+    {
+      "ordinal": 5,
+      "phase": "measured",
+      "http_seconds": 3.545881126075983,
+      "ready_seconds": 3.6619727469515055,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "98fe883afa568b952f12878bde34bb09f29a08104ed7e00fde9f5dce9b00da40",
+      "action": "rest"
+    },
+    {
+      "ordinal": 6,
+      "phase": "measured",
+      "http_seconds": 3.5540667409077287,
+      "ready_seconds": 3.669778869021684,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "9812af5d795d50c738588a8697b5e2286ef7b36324f50693c2b9b4f2e8441879",
+      "action": "rest"
+    },
+    {
+      "ordinal": 7,
+      "phase": "measured",
+      "http_seconds": 3.547505117021501,
+      "ready_seconds": 3.6664876979775727,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "568f0d75329629921b36571ae6209da21986595bcc0e5deefa28d0f99c247f79",
+      "action": "rest"
+    },
+    {
+      "ordinal": 8,
+      "phase": "measured",
+      "http_seconds": 3.8996319340076298,
+      "ready_seconds": 4.028935521142557,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "76b4b4489e715a9902d2aa45fb5ddc5f9a7257a34e05a35c45bdd2fd36b2c333",
+      "action": "speak"
+    },
+    {
+      "ordinal": 9,
+      "phase": "measured",
+      "http_seconds": 3.9727099989540875,
+      "ready_seconds": 4.093477816786617,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "7515e1584613d62e9525d469efa7dfb7cd57992b361b9a9f7a97cfbd3a41698e",
+      "action": "rest"
+    },
+    {
+      "ordinal": 10,
+      "phase": "measured",
+      "http_seconds": 3.9779565557837486,
+      "ready_seconds": 4.096392116043717,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "ed2d08865810b350afde3ad08f895bb4c2fc162238eb1ad784435efa532c5795",
+      "action": "turn_page"
+    },
+    {
+      "ordinal": 11,
+      "phase": "measured",
+      "http_seconds": 3.9052701250184327,
+      "ready_seconds": 4.029596529901028,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "6e97ed7c5b906aa2dae9c8b039c8b548ab685c46dc8ccf7261ca5df029ff9f32",
+      "action": "speak"
+    },
+    {
+      "ordinal": 12,
+      "phase": "measured",
+      "http_seconds": 4.055993593065068,
+      "ready_seconds": 4.177112315082923,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "e5cfc02638e3417212193c1a6d276995f03f44acb88924b74ed6b26c95744fa6",
+      "action": "speak"
+    },
+    {
+      "ordinal": 13,
+      "phase": "measured",
+      "http_seconds": 3.582710525020957,
+      "ready_seconds": 3.6981664272025228,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "d8df6273d8df06a3e9809c58b58e11b0200831ccb11f3c385144b213660c9bbb",
+      "action": "rest"
+    },
+    {
+      "ordinal": 14,
+      "phase": "measured",
+      "http_seconds": 3.5897789399605244,
+      "ready_seconds": 3.7062881940510124,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "ced323d935a23f2860804ce1478db2419eb29b9d9aa2ee713c7e80e24a27d04a",
+      "action": "rest"
+    },
+    {
+      "ordinal": 15,
+      "phase": "measured",
+      "http_seconds": 3.6023559370078146,
+      "ready_seconds": 3.719565568957478,
+      "frames": 119,
+      "media_seconds": 4.958333333333333,
+      "sha256": "b2e4729729a2ebaf3da7c80d0a5fbfd011d7f5b44cac642758588416e2cc1da7",
+      "action": "rest"
+    }
+  ]
+}

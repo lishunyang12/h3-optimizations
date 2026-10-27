@@ -1,0 +1,86 @@
+{
+  "15s-4step-mxfp8-sage-nvfp4": {
+    "runtime": "/absolute/path/to/prepared-15s-runtime",
+    "python": "/absolute/path/to/matching-venv/bin/python",
+    "model": "/absolute/path/to/checkpoint",
+    "adapter": "/absolute/path/to/adapter_model.safetensors",
+    "adaln": "/absolute/path/to/adapter-bound-adaln.safetensors",
+    "cuda": "/absolute/path/to/cuda-13.2"
+  },
+  "15s-4step-output-fusion": {
+    "runtime": "/opt/h3-runtime-15s-output-fusion",
+    "python": "/absolute/path/to/matching-venv/bin/python",
+    "model": "/absolute/path/to/checkpoint",
+    "adapter": "/absolute/path/to/adapter_model.safetensors",
+    "adaln": "/absolute/path/to/adapter-bound-adaln.safetensors",
+    "cuda": "/absolute/path/to/cuda-13.2"
+  },
+  "5s-8step-bf16-fi": {
+    "runtime": "/absolute/path/to/vllm-omni-c67204d",
+    "python": "/absolute/path/to/matching-venv/bin/python",
+    "model": "/absolute/path/to/checkpoint",
+    "fastvideo": "/absolute/path/to/fastvideo-kernel-0.3.4/python"
+  },
+  "5s-8step-qad-fi": {
+    "runtime": "/absolute/path/to/vllm-omni-c67204d",
+    "python": "/absolute/path/to/matching-venv/bin/python",
+    "model": "/absolute/path/to/checkpoint",
+    "fastvideo": "/absolute/path/to/fastvideo-kernel-0.3.4/python"
+  },
+  "5s-8step-qad-8l-fi": {
+    "runtime": "/absolute/path/to/vllm-omni-c67204d",
+    "python": "/absolute/path/to/matching-venv/bin/python",
+    "model": "/absolute/path/to/checkpoint",
+    "fastvideo": "/absolute/path/to/fastvideo-kernel-0.3.4/python",
+    "decoder": "/absolute/path/to/fast-8L/decoder-nvfp4.safetensors"
+  },
+  "5s-8step-bf16-cudnn": {
+    "runtime": "/absolute/path/to/vllm-omni-c67204d",
+    "python": "/absolute/path/to/matching-venv/bin/python",
+    "model": "/absolute/path/to/checkpoint",
+    "fastvideo": "/absolute/path/to/fastvideo-kernel-0.3.4/python"
+  },
+  "5s-8step-bf16-triton": {
+    "runtime": "/absolute/path/to/vllm-omni-c67204d",
+    "python": "/absolute/path/to/matching-venv/bin/python",
+    "model": "/absolute/path/to/checkpoint",
+    "fastvideo": "/absolute/path/to/fastvideo-kernel-0.3.4/python"
+  },
+  "5s-8step-qad-cudnn": {
+    "runtime": "/absolute/path/to/vllm-omni-c67204d",
+    "python": "/absolute/path/to/matching-venv/bin/python",
+    "model": "/absolute/path/to/checkpoint",
+    "fastvideo": "/absolute/path/to/fastvideo-kernel-0.3.4/python"
+  },
+  "5s-8step-qad-8l-cudnn": {
+    "runtime": "/absolute/path/to/vllm-omni-c67204d",
+    "python": "/absolute/path/to/matching-venv/bin/python",
+    "model": "/absolute/path/to/checkpoint",
+    "fastvideo": "/absolute/path/to/fastvideo-kernel-0.3.4/python",
+    "decoder": "/absolute/path/to/fast-8L/decoder-nvfp4.safetensors"
+  },
+  "5s-avatar-ref2va-4step": {
+    "runtime": "/opt/h3-runtime-avatar5",
+    "python": "/opt/h3-venv/bin/python",
+    "model": "/models/ref2va-fourstep/Ref2VA",
+    "adapter": "/models/turbo/minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors",
+    "adaln": "/models/guide-adaln.safetensors",
+    "cuda": "/usr/local/cuda-13.2"
+  },
+  "5s-t2va-4step-all-mxfp8": {
+    "runtime": "/opt/h3-runtime-t2va5",
+    "python": "/absolute/path/to/matching-venv/bin/python",
+    "model": "/absolute/path/to/checkpoint",
+    "adapter": "/absolute/path/to/adapter_model.safetensors",
+    "adaln": "/absolute/path/to/adapter-bound-adaln.safetensors",
+    "cuda": "/absolute/path/to/cuda-13.2"
+  },
+  "5s-t2va-4step-first-step-bf16": {
+    "runtime": "/opt/h3-runtime-t2va5",
+    "python": "/absolute/path/to/matching-venv/bin/python",
+    "model": "/absolute/path/to/checkpoint",
+    "adapter": "/absolute/path/to/adapter_model.safetensors",
+    "adaln": "/absolute/path/to/adapter-bound-adaln.safetensors",
+    "cuda": "/absolute/path/to/cuda-13.2"
+  }
+}

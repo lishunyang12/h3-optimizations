@@ -1,0 +1,48 @@
+REF2VA_MXFP8_NFE {"rank": 0, "forwards": 1, "modules": 200, "calls": 200, "bf16_projection_calls": 0, "mxfp8_projection_calls": 200, "fused_fc2_calls": 50, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 5, "forwards": 1, "modules": 200, "calls": 200, "bf16_projection_calls": 0, "mxfp8_projection_calls": 200, "fused_fc2_calls": 50, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 6, "forwards": 1, "modules": 200, "calls": 200, "bf16_projection_calls": 0, "mxfp8_projection_calls": 200, "fused_fc2_calls": 50, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 2, "forwards": 1, "modules": 200, "calls": 200, "bf16_projection_calls": 0, "mxfp8_projection_calls": 200, "fused_fc2_calls": 50, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 3, "forwards": 1, "modules": 200, "calls": 200, "bf16_projection_calls": 0, "mxfp8_projection_calls": 200, "fused_fc2_calls": 50, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 1, "forwards": 1, "modules": 200, "calls": 200, "bf16_projection_calls": 0, "mxfp8_projection_calls": 200, "fused_fc2_calls": 50, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 4, "forwards": 1, "modules": 200, "calls": 200, "bf16_projection_calls": 0, "mxfp8_projection_calls": 200, "fused_fc2_calls": 50, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 7, "forwards": 1, "modules": 200, "calls": 200, "bf16_projection_calls": 0, "mxfp8_projection_calls": 200, "fused_fc2_calls": 50, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 1, "forwards": 2, "modules": 200, "calls": 400, "bf16_projection_calls": 0, "mxfp8_projection_calls": 400, "fused_fc2_calls": 100, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 5, "forwards": 2, "modules": 200, "calls": 400, "bf16_projection_calls": 0, "mxfp8_projection_calls": 400, "fused_fc2_calls": 100, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 7, "forwards": 2, "modules": 200, "calls": 400, "bf16_projection_calls": 0, "mxfp8_projection_calls": 400, "fused_fc2_calls": 100, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 0, "forwards": 2, "modules": 200, "calls": 400, "bf16_projection_calls": 0, "mxfp8_projection_calls": 400, "fused_fc2_calls": 100, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 2, "forwards": 2, "modules": 200, "calls": 400, "bf16_projection_calls": 0, "mxfp8_projection_calls": 400, "fused_fc2_calls": 100, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 3, "forwards": 2, "modules": 200, "calls": 400, "bf16_projection_calls": 0, "mxfp8_projection_calls": 400, "fused_fc2_calls": 100, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 4, "forwards": 2, "modules": 200, "calls": 400, "bf16_projection_calls": 0, "mxfp8_projection_calls": 400, "fused_fc2_calls": 100, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 6, "forwards": 2, "modules": 200, "calls": 400, "bf16_projection_calls": 0, "mxfp8_projection_calls": 400, "fused_fc2_calls": 100, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 1, "forwards": 3, "modules": 200, "calls": 600, "bf16_projection_calls": 0, "mxfp8_projection_calls": 600, "fused_fc2_calls": 150, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 3, "forwards": 3, "modules": 200, "calls": 600, "bf16_projection_calls": 0, "mxfp8_projection_calls": 600, "fused_fc2_calls": 150, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 7, "forwards": 3, "modules": 200, "calls": 600, "bf16_projection_calls": 0, "mxfp8_projection_calls": 600, "fused_fc2_calls": 150, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 2, "forwards": 3, "modules": 200, "calls": 600, "bf16_projection_calls": 0, "mxfp8_projection_calls": 600, "fused_fc2_calls": 150, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 4, "forwards": 3, "modules": 200, "calls": 600, "bf16_projection_calls": 0, "mxfp8_projection_calls": 600, "fused_fc2_calls": 150, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 5, "forwards": 3, "modules": 200, "calls": 600, "bf16_projection_calls": 0, "mxfp8_projection_calls": 600, "fused_fc2_calls": 150, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 6, "forwards": 3, "modules": 200, "calls": 600, "bf16_projection_calls": 0, "mxfp8_projection_calls": 600, "fused_fc2_calls": 150, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 0, "forwards": 3, "modules": 200, "calls": 600, "bf16_projection_calls": 0, "mxfp8_projection_calls": 600, "fused_fc2_calls": 150, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 1, "forwards": 4, "modules": 200, "calls": 800, "bf16_projection_calls": 0, "mxfp8_projection_calls": 800, "fused_fc2_calls": 200, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 2, "forwards": 4, "modules": 200, "calls": 800, "bf16_projection_calls": 0, "mxfp8_projection_calls": 800, "fused_fc2_calls": 200, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 4, "forwards": 4, "modules": 200, "calls": 800, "bf16_projection_calls": 0, "mxfp8_projection_calls": 800, "fused_fc2_calls": 200, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 5, "forwards": 4, "modules": 200, "calls": 800, "bf16_projection_calls": 0, "mxfp8_projection_calls": 800, "fused_fc2_calls": 200, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 0, "forwards": 4, "modules": 200, "calls": 800, "bf16_projection_calls": 0, "mxfp8_projection_calls": 800, "fused_fc2_calls": 200, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 6, "forwards": 4, "modules": 200, "calls": 800, "bf16_projection_calls": 0, "mxfp8_projection_calls": 800, "fused_fc2_calls": 200, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 7, "forwards": 4, "modules": 200, "calls": 800, "bf16_projection_calls": 0, "mxfp8_projection_calls": 800, "fused_fc2_calls": 200, "dense_attention": true, "fallback": 0}
+REF2VA_MXFP8_NFE {"rank": 3, "forwards": 4, "modules": 200, "calls": 800, "bf16_projection_calls": 0, "mxfp8_projection_calls": 800, "fused_fc2_calls": 200, "dense_attention": true, "fallback": 0}
+H3_VAE_NVFP4_COMPLETE {"calls": {"fc1": 144, "fc2": 144, "out": 504, "qkv": 144}, "fallback": 0, "group_size": 16, "layers": 144, "rank": 5, "status": "PASS"}
+H3_VAE_NVFP4_COMPLETE {"calls": {"fc1": 144, "fc2": 144, "out": 504, "qkv": 144}, "fallback": 0, "group_size": 16, "layers": 144, "rank": 0, "status": "PASS"}
+H3_VAE_NVFP4_COMPLETE {"calls": {"fc1": 144, "fc2": 144, "out": 504, "qkv": 144}, "fallback": 0, "group_size": 16, "layers": 144, "rank": 2, "status": "PASS"}
+H3_VAE_NVFP4_COMPLETE {"calls": {"fc1": 144, "fc2": 144, "out": 396, "qkv": 144}, "fallback": 0, "group_size": 16, "layers": 144, "rank": 6, "status": "PASS"}
+H3_VAE_NVFP4_COMPLETE {"calls": {"fc1": 144, "fc2": 144, "out": 504, "qkv": 144}, "fallback": 0, "group_size": 16, "layers": 144, "rank": 1, "status": "PASS"}
+H3_VAE_NVFP4_COMPLETE {"calls": {"fc1": 144, "fc2": 144, "out": 504, "qkv": 144}, "fallback": 0, "group_size": 16, "layers": 144, "rank": 4, "status": "PASS"}
+H3_VAE_PAIR_COMPLETE {"frames": 124, "gathers": 4, "mixed": {"batch_sizes": [4, 4, 4, 2], "decoder_calls": 4, "tile_outputs": 14, "to_out_calls": 504}, "padding_tiles": 7, "rank": 5, "tile_calls": 14, "windows": 7}
+H3_VAE_PAIR_COMPLETE {"frames": 124, "gathers": 4, "mixed": {"batch_sizes": [4, 4, 4, 2], "decoder_calls": 4, "tile_outputs": 14, "to_out_calls": 504}, "padding_tiles": 7, "rank": 0, "tile_calls": 14, "windows": 7}
+H3_VAE_PAIR_COMPLETE {"frames": 124, "gathers": 4, "mixed": {"batch_sizes": [4, 4, 4, 2], "decoder_calls": 4, "tile_outputs": 14, "to_out_calls": 504}, "padding_tiles": 7, "rank": 2, "tile_calls": 14, "windows": 7}
+H3_VAE_PAIR_COMPLETE {"frames": 124, "gathers": 4, "mixed": {"batch_sizes": [3, 3, 3, 2], "decoder_calls": 4, "tile_outputs": 11, "to_out_calls": 396}, "padding_tiles": 7, "rank": 6, "tile_calls": 11, "windows": 7}
+H3_VAE_NVFP4_COMPLETE {"calls": {"fc1": 144, "fc2": 144, "out": 360, "qkv": 144}, "fallback": 0, "group_size": 16, "layers": 144, "rank": 7, "status": "PASS"}
+H3_VAE_PAIR_COMPLETE {"frames": 124, "gathers": 4, "mixed": {"batch_sizes": [4, 4, 4, 2], "decoder_calls": 4, "tile_outputs": 14, "to_out_calls": 504}, "padding_tiles": 7, "rank": 4, "tile_calls": 14, "windows": 7}
+H3_VAE_PAIR_COMPLETE {"frames": 124, "gathers": 4, "mixed": {"batch_sizes": [4, 4, 4, 2], "decoder_calls": 4, "tile_outputs": 14, "to_out_calls": 504}, "padding_tiles": 7, "rank": 1, "tile_calls": 14, "windows": 7}
+H3_VAE_NVFP4_COMPLETE {"calls": {"fc1": 144, "fc2": 144, "out": 504, "qkv": 144}, "fallback": 0, "group_size": 16, "layers": 144, "rank": 3, "status": "PASS"}
+H3_VAE_PAIR_COMPLETE {"frames": 124, "gathers": 4, "mixed": {"batch_sizes": [3, 3, 3, 1], "decoder_calls": 4, "tile_outputs": 10, "to_out_calls": 360}, "padding_tiles": 7, "rank": 7, "tile_calls": 10, "windows": 7}
+H3_VAE_PAIR_COMPLETE {"frames": 124, "gathers": 4, "mixed": {"batch_sizes": [4, 4, 4, 2], "decoder_calls": 4, "tile_outputs": 14, "to_out_calls": 504}, "padding_tiles": 7, "rank": 3, "tile_calls": 14, "windows": 7}
