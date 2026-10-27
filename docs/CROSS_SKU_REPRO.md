@@ -8,7 +8,7 @@
 
 | Case | GPU 数 | 工作负载 | 历史 HTTP 中位数 |
 |---|---:|---|---:|
-| `5s-avatar-ref2va-4step` | 8 | 960×544，Ref2VA Turbo 四步，124 帧窗口 / 5 帧重叠 | 3.602356 s，13 个正式续段 |
+| `5s-avatar-ref2va-4step` | 8 | 960×544，Ref2VA Turbo 四步，124 帧窗口 / 5 帧重叠 | 3.589779 s，13 个正式续段 |
 | `15s-4step-mxfp8-sage-nvfp4` | 8 | 1280×704，FastH3 四步，362 帧 | 13.304 s，3 次 |
 | `15s-4step-output-fusion` | 8 | 同上，加输出融合 | 13.261 s，3 次，另一轮测试 |
 | `5s-t2va-4step-all-mxfp8` | 8 | 1344×768，FastH3 四步，124 帧 | 4.680764 s，5 次 |
