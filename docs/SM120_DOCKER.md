@@ -82,21 +82,52 @@ sidecars. Copy that directory and keep it mounted at `/models` on the target.
 
 Choose an absolute host directory with enough space for both large checkpoints:
 
+**Avatar download update, 2026-10-28:** the image's `download` command still
+requests the historical MiniMax revision that now returns `RevisionNotFound`.
+Use the existing image's `exec` command below to download the verified
+original-compatible Ref2VA files and prepare both asset directories. Keep both
+avatar `--revision` arguments; omitting them selects the moving `main` branch.
+The [avatar asset instructions](CROSS_SKU_REPRO.md#5s-avatar-verified-download-instructions)
+record file sizes, verification scope and the separate original AdaLN cache.
+No image rebuild is required for this download workaround.
+
 ```bash
 mkdir -p "$PWD/h3-models" "$PWD/h3-results"
-docker run --rm \
+docker run --rm -i \
   --mount type=bind,src="$PWD/h3-models",dst=/models \
-  h3-sm120:20261027 download
+  h3-sm120:20261027 exec bash -se <<'SH'
+hf download MiniMaxAI/MiniMax-H3 \
+  --revision 42ed227ee7df40d41602854ae760620d6eb651fe \
+  --include "Ref2VA/*" \
+  --local-dir /models/avatar-downloads/MiniMax-H3
+hf download lightx2v/Minimax-h3-Turbo \
+  minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors \
+  --revision 3ec17a324ced54151364f24f8b5fb6bf7e26414f \
+  --local-dir /models/avatar-downloads/adapter
+python3 scripts/sku_models.py --case 5s-avatar-ref2va-4step \
+  --base /models/avatar-downloads/MiniMax-H3 \
+  --adapter /models/avatar-downloads/adapter/minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors \
+  --output /models/avatar-assets
+python3 scripts/sku_models.py --case 15s-4step-mxfp8-sage-nvfp4 \
+  --download --output /models/fasth3-assets
+SH
 ```
 
-This fetches the pinned upstream base partitions and adapters and verifies the
-adapter hashes. The downloader refuses to overwrite an existing asset directory.
+The preparation scripts verify the adapter hashes and refuse to overwrite an
+existing output directory. The 15s download path retains its historical pins;
+the Ref2VA equivalence check does not qualify a replacement for that checkpoint.
 Weights remain subject to their upstream terms. For an interrupted download,
 inspect the partial directory before choosing a new output or resuming with the
 underlying Hugging Face downloader; the wrapper does not silently overwrite it.
 
-Build the two AdaLN sidecars once on an idle GPU. This preparation loads model
-weights and is outside benchmark timing:
+For the original avatar cache, obtain `guide-adaln.safetensors` separately and
+place it in the host's `h3-models` directory. Check its SHA-256 against the
+[recorded value](CROSS_SKU_REPRO.md#5s-avatar-verified-download-instructions).
+There is no public URL for that file as of 2026-10-28.
+
+If neither cache is available, build both sidecars once on an idle GPU. This
+preparation loads model weights and is outside benchmark timing. A newly
+generated avatar sidecar is not assumed byte-identical to the retained cache:
 
 ```bash
 docker run --rm --gpus '"device=0"' --ipc=host \
@@ -104,8 +135,24 @@ docker run --rm --gpus '"device=0"' --ipc=host \
   h3-sm120:20261027 caches
 ```
 
-Copy the complete model directory, including both generated sidecars, to the
-other machine. Keep it mounted at `/models` on both machines: model views contain
+The `caches` command requires both outputs to be absent. If you already copied
+the original avatar cache, build only the missing FastH3 sidecar:
+
+```bash
+docker run --rm --gpus '"device=0"' --ipc=host \
+  --mount type=bind,src="$PWD/h3-models",dst=/models \
+  -e PYTHONPATH=/opt/h3-runtime-15s \
+  h3-sm120:20261027 exec python3 reference-runtime/tools/minimax_h3/build_adaln_cache.py \
+  --transformer-path /models/fasth3-assets/MiniMax-H3/FL2VA/transformer \
+  --model-variant fl2va --mode t2va \
+  --fasth3-adapter /models/fasth3-assets/adapter/vsa-datafree/adapter_model.safetensors \
+  --base-schedule 0.999 0.749 0.5 0.25 0.0 --flow-shift 12 --audio-flow-shift 3 \
+  --output /models/fasth3-adaln.safetensors
+```
+
+Copy the complete model directory, including both sidecars, to the
+other machine. Include `avatar-downloads`, `avatar-assets` and `fasth3-assets`.
+Keep it mounted at `/models` on both machines: model views contain
 absolute symlinks inside that mount. Do not build independent sidecars and assume
 byte equality.
 

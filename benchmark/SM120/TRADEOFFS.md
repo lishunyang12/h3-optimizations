@@ -80,7 +80,7 @@ equality to original BF16 inference. Full decode passed for these recorded clips
 
 | Stage | Deployed 5s avatar | Selected 15s FastH3 |
 |---|---|---|
-| Base weights | [MiniMax-H3 Ref2VA, revision 73372e6](https://huggingface.co/MiniMaxAI/MiniMax-H3/tree/73372e6cf53e414edd3ab03e357717fb0602e758/Ref2VA) | [MiniMax-H3 FL2VA, revision 9bfb669](https://huggingface.co/MiniMaxAI/MiniMax-H3/tree/9bfb6693f2cf6de171db46d1aa586f67d773a1da/FL2VA) |
+| Base weights | [Verified original-compatible Ref2VA download, revision 42ed227](https://huggingface.co/MiniMaxAI/MiniMax-H3/tree/42ed227ee7df40d41602854ae760620d6eb651fe/Ref2VA); historical revision `73372e6` is unavailable | [MiniMax-H3 FL2VA, revision 9bfb669](https://huggingface.co/MiniMaxAI/MiniMax-H3/tree/9bfb6693f2cf6de171db46d1aa586f67d773a1da/FL2VA) |
 | Four-step adapter | [LightX2V Turbo v0.1](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/3ec17a324ced54151364f24f8b5fb6bf7e26414f) | [FastH3 Preview LoRA, vsa-datafree](https://huggingface.co/FastVideo/FastVideo-FastH3-4-step-Preview-v1-LoRA/tree/c0e8ec2ac460e801094a0abe74bfb57347388ce3/vsa-datafree) |
 | Prepared runtime | `/opt/h3-runtime-avatar5` | `/opt/h3-runtime-15s` |
 | AdaLN sidecar | `/models/guide-adaln.safetensors`; 34 recorded plans | `/models/fasth3-adaln.safetensors`; adapter-bound v3 |
@@ -91,8 +91,10 @@ Exact adapter filenames, revisions and SHA-256 values are in the
 [case profiles](../../configs/sku-cases.json) and
 [15s profile](../../configs/fasth3-15s-4step-reference.json). The
 [setup guide](../../docs/CROSS_SKU_REPRO.md) creates the model views and sidecars.
-The Docker downloader writes paths to `/models/avatar-assets/model-assets.json`
-and `/models/fasth3-assets/model-assets.json`.
+The [avatar download instructions](../../docs/CROSS_SKU_REPRO.md#5s-avatar-verified-download-instructions)
+explain the verified retrieval revision and required revision pins. The prepared
+metadata paths are `/models/avatar-assets/model-assets.json` and
+`/models/fasth3-assets/model-assets.json`.
 
 The retained intermediate precision modes do **not** establish separately
 trained checkpoint files to download. Quantization occurs in the runtime.

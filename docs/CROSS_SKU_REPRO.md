@@ -102,32 +102,108 @@ for these historical runtimes.
 Use an environment with huggingface-hub installed. These commands download large
 model weights; the reproduction ZIP itself contains no model weights.
 
+### 5s avatar: verified download instructions
+
+As checked on **2026-10-28**, the historical MiniMax-H3 revision
+`73372e6cf53e414edd3ab03e357717fb0602e758` returns `RevisionNotFound`.
+The official repository still serves the original-compatible
+[Ref2VA partition at revision 42ed227](https://huggingface.co/MiniMaxAI/MiniMax-H3/tree/42ed227ee7df40d41602854ae760620d6eb651fe/Ref2VA).
+All **81 files**, including **29 weight files**, have server-reported sizes and
+hashes matching the verified retained original partition. This verification
+covers `Ref2VA`, not the whole repository or the 15s `FL2VA` checkpoint.
+
+| Asset | Size (decimal GB) | How to obtain it |
+|---|---:|---|
+| Ref2VA base partition | 144.05 | Official pinned download below |
+| LightX2V Ref2VA 4-step adapter | 1.38 | Official pinned download below |
+| Original `guide-adaln.safetensors` | 1.65 | Supplied separately by the experiment owner; no public download URL as of 2026-10-28 |
+
+Run from the repository root. `/models` must be writable; adjust `H3_MODELS` if
+needed. The prepared output directory `avatar-assets` must not already exist.
+
 ```bash
-python scripts/sku_models.py --case 5s-avatar-ref2va-4step --download --output /models/avatar-assets
+python3 -m pip install "huggingface_hub==1.29.0"
+H3_MODELS=/models
+
+hf download MiniMaxAI/MiniMax-H3 \
+  --revision 42ed227ee7df40d41602854ae760620d6eb651fe \
+  --include "Ref2VA/*" \
+  --local-dir "$H3_MODELS/avatar-downloads/MiniMax-H3"
+
+hf download lightx2v/Minimax-h3-Turbo \
+  minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors \
+  --revision 3ec17a324ced54151364f24f8b5fb6bf7e26414f \
+  --local-dir "$H3_MODELS/avatar-downloads/adapter"
+
+python3 scripts/sku_models.py --case 5s-avatar-ref2va-4step \
+  --base "$H3_MODELS/avatar-downloads/MiniMax-H3" \
+  --adapter "$H3_MODELS/avatar-downloads/adapter/minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors" \
+  --output "$H3_MODELS/avatar-assets"
+```
+
+**Keep both `--revision` arguments for reproduction.** Without them, Hugging Face
+uses the repository's moving `main` branch. The LightX2V revision is accessible
+and is separate from the unavailable historical MiniMax base revision.
+Use the exact BF16 Ref2VA adapter filename above.
+
+The existing avatar `sku_models.py --download` command and the prebuilt image's
+`download` command still request the unavailable base revision. Use the explicit
+downloads above followed by `--base` and `--adapter`; no inference-code change is
+required. Docker users should use the equivalent
+[container commands](SM120_DOCKER.md#download-models-and-prepare-caches).
+
+The preparation script verifies the adapter SHA-256 and creates the four-step
+model view. Copy `model` and `adapter` from
+`$H3_MODELS/avatar-assets/model-assets.json` into the asset configuration. Keep
+`avatar-downloads` alongside `avatar-assets`: the prepared view links to those
+downloaded files. For existing weights, pass their paths to `--base` and
+`--adapter`; the base directory must contain `Ref2VA`.
+
+After receiving the original AdaLN file, place it at
+`$H3_MODELS/guide-adaln.safetensors`, use that path for `adaln`, and verify:
+
+```bash
+printf '%s  %s\n' \
+  000ba165406e6b64e0ae3a952f89f55833f45b37dd9a41eae327bac6bfe42301 \
+  "$H3_MODELS/guide-adaln.safetensors" | sha256sum --check -
+```
+
+This is the SHA-256 recorded from the retained original sidecar on 2026-10-28.
+Use identical file bytes on both machines. Generating a new sidecar is an
+alternative for fresh paired runs, but does not establish byte identity with
+the historical cache.
+
+### 15s FastH3 assets
+
+```bash
 python scripts/sku_models.py --case 15s-4step-mxfp8-sage-nvfp4 --download --output /models/fasth3-assets
 ```
 
 For existing weights, replace `--download` with
 `--base /path/to/MiniMax-H3 --adapter /path/to/adapter.safetensors`. The tool
-verifies the adapter SHA-256 and creates the avatar's four-step model view.
+verifies the adapter SHA-256.
 Copy the resulting `model` and `adapter` paths from `model-assets.json` into your
 asset configuration. Base directories must contain the relevant model partition.
 
-The avatar pins MiniMax-H3 revision
-`73372e6cf53e414edd3ab03e357717fb0602e758` and LightX2V Turbo revision
-`3ec17a324ced54151364f24f8b5fb6bf7e26414f`. The 15s case pins MiniMax-H3 revision
+The avatar's historical case record retains MiniMax-H3 revision
+`73372e6cf53e414edd3ab03e357717fb0602e758`; the verified retrieval revision above
+does not rewrite that provenance. The 15s case pins MiniMax-H3 revision
 `9bfb6693f2cf6de171db46d1aa586f67d773a1da` and FastVideo Preview LoRA revision
 `c0e8ec2ac460e801094a0abe74bfb57347388ce3`. Exact filenames and adapter hashes
 are in the case profiles. The avatar reference image is bundled and hash-checked.
 
-**Generate each sidecar once on an idle GPU, then copy that exact file to both
-machines.** This preparation is outside request timing. Independently generated
-sidecars should not be assumed to contain identical bytes.
+### Generate sidecars when no retained cache is available
+
+Skip the avatar generation command if using the supplied original cache.
+Otherwise, **generate each needed sidecar once on an idle GPU, then copy that
+exact file to both machines**. This preparation is outside request timing.
+Independently generated sidecars should not be assumed to contain identical
+bytes. The paths below assume `/models`; adjust them if using another location.
 
 ```bash
 PYTHONPATH=/opt/h3-runtime-avatar5 python scripts/sku_adaln.py \
   --runtime /opt/h3-runtime-avatar5 \
-  --transformer-path /models/avatar-assets/MiniMax-H3/Ref2VA/transformer \
+  --transformer-path /models/avatar-assets/ref2va-fourstep/Ref2VA/transformer \
   --output /models/guide-adaln.safetensors
 
 PYTHONPATH=/opt/h3-runtime-15s python reference-runtime/tools/minimax_h3/build_adaln_cache.py \

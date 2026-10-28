@@ -111,7 +111,7 @@ reproduction's scope.
 | Component | Avatar | FastH3 |
 |---|---|---|
 | Base repository | `MiniMaxAI/MiniMax-H3` | `MiniMaxAI/MiniMax-H3` |
-| Base revision | `73372e6cf53e414edd3ab03e357717fb0602e758` | `9bfb6693f2cf6de171db46d1aa586f67d773a1da` |
+| Historical base revision | `73372e6cf53e414edd3ab03e357717fb0602e758` | `9bfb6693f2cf6de171db46d1aa586f67d773a1da` |
 | Partition | `Ref2VA` | `FL2VA` |
 | Adapter repository | `lightx2v/Minimax-h3-Turbo` | `FastVideo/FastVideo-FastH3-4-step-Preview-v1-LoRA` |
 | Adapter revision | `3ec17a324ced54151364f24f8b5fb6bf7e26414f` | `c0e8ec2ac460e801094a0abe74bfb57347388ce3` |
@@ -119,15 +119,29 @@ reproduction's scope.
 | Base sigma schedule | `[1, 0.75, 0.5, 0.25, 0]` | `[0.999, 0.749, 0.5, 0.25, 0]` |
 | Video / audio flow shifts | 12 / 3 | 12 / 3 |
 
+**Download availability, checked 2026-10-28:** the historical avatar base revision
+returns `RevisionNotFound`. Its original-compatible `Ref2VA` partition remains
+available at official revision `42ed227ee7df40d41602854ae760620d6eb651fe`.
+All 81 file sizes and server-reported hashes match the verified retained original
+partition, including all 29 weight files. Use the
+[explicit pinned downloads](CROSS_SKU_REPRO.md#5s-avatar-verified-download-instructions)
+and existing `--base` / `--adapter` preparation path. Historical case identities
+remain unchanged; this check does not cover the 15s base checkpoint.
+
 Avatar adapter SHA-256:
 `9e642fc8749c74f8da5e2382877ab5c7aa37b9a73b7fd0d6d457bd1b3cb1ae99`.
 
 FastH3 adapter SHA-256:
 `42dc502a2078f166c396a1fa75f29728d1844363652d345d5ef3e2b444ed6470`.
 
+The retained original avatar AdaLN sidecar is 1,648,713,024 bytes. Its SHA-256,
+recorded on 2026-10-28, is
+`000ba165406e6b64e0ae3a952f89f55833f45b37dd9a41eae327bac6bfe42301`.
+It is supplied separately; no public download URL is available as of that date.
+
 The avatar has 34 saved guide timestep plans and guide timestep 0.8. The FastH3
-sidecar is v3 and bound to its adapter and schedule. Generate each sidecar once
-and copy the same bytes to both machines. The launcher verifies input and adapter
+sidecar is v3 and bound to its adapter and schedule. When generating new sidecars,
+build each once and copy the same bytes to both machines. The launcher verifies input and adapter
 hashes and compares actual model/cache fingerprints between runs.
 
 ## Hardware attribution and comparison limits
